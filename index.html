@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fa" dir="rtl" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>فروشگاه AX-A01-X</title>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="assets/js/global state management.js"></script>
+  <script src="assets/js/configuration.js"></script>
+  <script src="assets/js/utility function.js"></script>
+  <script src="assets/js/crud operations products.js"></script>
+  <script src="assets/js/toast notifications.js"></script>
+  <script src="assets/js/crud operations orders.js"></script>
+  <script src="assets/js/cart function.js"></script> 
+  <script src="assets/js/authentication functions.js"></script>
+  <script src="assets/js/navigation.js"></script>
+  <script src="assets/js/main render function.js"></script>
+  <script src="assets/js/confirm modal.js"></script>
+  <script src="assets/js/header component.js"></script> 
+  <script src="assets/js/footer component.js"></script>
+  <script src="assets/js/product card component.js"></script>
+  <script src="assets/js/home page.js"></script>
+  <script src="assets/js/shop page.js"></script>
+  <script src="assets/js/product detail page.js"></script> 
+  <script src="assets/js/cart page.js"></script>
+  <script src="assets/js/login page.js"></script>
+  <script src="assets/js/profile page.js"></script>
+  <script src="assets/js/admin panel.js"></script>
+  <script src="assets/js/admin dashboard.js"></script>
+  <script src="assets/js/admin products.js"></script>    
+  <script src="assets/js/admin order.js"></script>
+  <script src="assets/js/tailwind-cdn.js"></script>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+  <style>
+  </style>
+ </head>
+ <body class="h-full bg-main text-white overflow-auto">
+  <div id="app" class="min-h-full w-full"></div><!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[200] flex flex-col gap-3 pointer-events-none"></div>
+  <script>
+
+// ═══════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+async function init() {
+  // Initialize Element SDK
+  if (window.elementSdk) {
+    await window.elementSdk.init({
+      defaultConfig,
+      onConfigChange: async (cfg) => {
+        config = { ...defaultConfig, ...cfg };
+        render();
+      },
+      mapToCapabilities: () => ({
+        recolorables: [],
+        borderables: [],
+        fontEditable: undefined,
+        fontSizeable: undefined
+      }),
+      mapToEditPanelValues: (cfg) => new Map([
+        ['store_name', cfg.store_name || defaultConfig.store_name],
+        ['hero_title', cfg.hero_title || defaultConfig.hero_title],
+        ['hero_subtitle', cfg.hero_subtitle || defaultConfig.hero_subtitle]
+      ])
+    });
+  }
+  
+  // Initialize Data SDK
+  if (window.dataSdk) {
+    const result = await window.dataSdk.init(dataHandler);
+    if (!result.isOk) {
+      console.error('Data SDK initialization failed');
+    }
+  }
+  
+  render();
+}
+
+// Start the application
+init();
+
+</script>
+</body>
+</html>

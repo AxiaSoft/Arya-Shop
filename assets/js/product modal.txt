@@ -1,0 +1,151 @@
+// ═══════════════════════════════════════════════════════════════
+// PRODUCT MODAL
+// ═══════════════════════════════════════════════════════════════
+function renderProductModal() {
+  const isEdit = state.editProduct && state.editProduct.id;
+  const product = state.editProduct || {};
+  
+  return `
+    <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay">
+      <div class="glass-strong rounded-3xl p-6 lg:p-8 max-w-lg w-full max-h-[90%] overflow-y-auto animate-scale">
+        <h2 class="text-xl font-black mb-6">
+          ${isEdit ? '✏️ ویرایش محصول' : '➕ محصول جدید'}
+        </h2>
+        
+        <form onsubmit="event.preventDefault(); ${isEdit ? 
+          `updateProduct(state.editProduct, { 
+            title: this.title.value, 
+            price: this.price.value, 
+            original_price: this.original_price.value, 
+            stock: this.stock.value, 
+            category: this.category.value, 
+            main_image: this.main_image.value, 
+            images: this.images.value, 
+            description: this.description.value 
+          })` : 
+          `createProduct({ 
+            title: this.title.value, 
+            price: this.price.value, 
+            original_price: this.original_price.value, 
+            stock: this.stock.value, 
+            category: this.category.value, 
+            main_image: this.main_image.value, 
+            images: this.images.value, 
+            description: this.description.value 
+          })`} }">
+          
+          <div class="space-y-5">
+            <div>
+              <label for="product-title" class="block text-sm text-white/70 mb-2">عنوان محصول *</label>
+              <input 
+                type="text" 
+                id="product-title" 
+                name="title" 
+                required 
+                value="${product.title || ''}"
+                class="w-full input-style"
+                placeholder="نام محصول را وارد کنید"
+              >
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="product-price" class="block text-sm text-white/70 mb-2">قیمت (تومان) *</label>
+                <input 
+                  type="number" 
+                  id="product-price" 
+                  name="price" 
+                  required 
+                  value="${product.price || ''}"
+                  class="w-full input-style"
+                  dir="ltr"
+                  placeholder="0"
+                >
+              </div>
+              <div>
+                <label for="product-original-price" class="block text-sm text-white/70 mb-2">قیمت اصلی</label>
+                <input 
+                  type="number" 
+                  id="product-original-price" 
+                  name="original_price" 
+                  value="${product.original_price || ''}"
+                  class="w-full input-style"
+                  dir="ltr"
+                  placeholder="برای تخفیف"
+                >
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="product-stock" class="block text-sm text-white/70 mb-2">موجودی *</label>
+                <input 
+                  type="number" 
+                  id="product-stock" 
+                  name="stock" 
+                  required 
+                  value="${product.stock || ''}"
+                  class="w-full input-style"
+                  dir="ltr"
+                  placeholder="0"
+                >
+              </div>
+              <div>
+                <label for="product-category" class="block text-sm text-white/70 mb-2">دسته‌بندی</label>
+                <select 
+                  id="product-category" 
+                  name="category" 
+                  class="w-full input-style"
+                >
+                  <option value="">انتخاب کنید</option>
+                  ${state.categories.map(cat => `
+                    <option value="${cat.id}" ${product.category === cat.id ? 'selected' : ''}>
+                      ${cat.icon} ${cat.title}
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm text-white/70 mb-2">عکس اصلی (ایموجی/URL)</label>
+              <input type="text" id="product-main-image" name="main_image" value="${product.main_image || product.image || ''}" class="w-full input-style text-center">
+            </div>
+            <div>
+              <label class="block text-sm text-white/70 mb-2">گالری تصاویر (با , جدا کنید)</label>
+              <input type="text" id="product-images" name="images" value="${(product.images||[]).join(', ')}" class="w-full input-style" placeholder="مثال: 📦, 🖼️, https://...">
+            </div>
+            
+            <div>
+              <label for="product-description" class="block text-sm text-white/70 mb-2">توضیحات</label>
+              <textarea 
+                id="product-description" 
+                name="description" 
+                rows="3" 
+                class="w-full input-style resize-none"
+                placeholder="توضیحات محصول..."
+              >${product.description || ''}</textarea>
+            </div>
+          </div>
+          
+          <div class="flex gap-4 mt-8">
+            <button 
+              type="button" 
+              onclick="state.editProduct = null; render()"
+              class="flex-1 btn-ghost py-4 rounded-xl font-semibold"
+            >
+              انصراف
+            </button>
+            <button 
+              type="submit" 
+              class="flex-1 btn-primary py-4 rounded-xl font-semibold"
+              ${state.loading ? 'disabled' : ''}
+            >
+              ${state.loading ? '⏳' : isEdit ? 'بروزرسانی' : 'ذخیره'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}

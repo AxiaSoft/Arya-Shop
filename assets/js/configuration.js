@@ -20,9 +20,9 @@ const socialLinks = {
 };
 
 const trustBadges = [
-  { img: "assets/img/badges/enamad.png", alt: "نماد اعتماد الکترونیکی" },
-  { img: "assets/img/badges/samandehi.png", alt: "نماد ساماندهی" },
-  { img: "assets/img/badges/digital-media.png", alt: "رسانه‌های دیجیتال" },
-  { img: "assets/img/logo/Arya-White.png", alt: "لوگوی آریا" }
+  //{ img: "assets/img/badges/enamad.png", alt: "نماد اعتماد الکترونیکی" },
+  //{ img: "assets/img/badges/samandehi.png", alt: "نماد ساماندهی" },
+  //{ img: "assets/img/badges/digital-media.png", alt: "رسانه‌های دیجیتال" },
+  { img: "assets/img/logo/Arya-White.png", alt: "لوگوی آریا" },
   
 ];

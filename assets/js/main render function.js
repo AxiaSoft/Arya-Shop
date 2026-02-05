@@ -1,8 +1,27 @@
 // ═══════════════════════════════════════════════════════════════
-// MAIN RENDER FUNCTION (GPT‑5 Refactor: batched + safe + fast)
-// File: assets/js/main render function.js
+// MAIN RENDER FUNCTION (GPT‑5 FINAL)
+// - Global login restore from AppState
+// - Batched render with rAF
+// - Safe compose + error boundary
+// - View transitions (optional)
 // ═══════════════════════════════════════════════════════════════
+
 (function () {
+  // ---------- Global login restore (before any render) ----------
+  (function restoreLoginGlobal() {
+    const saved = (window.AppState ? AppState.get() : {}) || {};
+
+    if (saved.loggedIn === true && saved.currentUser) {
+      state.currentUser = saved.currentUser;
+      state.user        = saved.user;
+      state.isAdmin     = saved.isAdmin || false;
+    } else {
+      state.currentUser = null;
+      state.user        = null;
+      state.isAdmin     = false;
+    }
+  })();
+
   // ---------- Mount points ----------
   const MOUNT = {
     app: '#app'
@@ -29,27 +48,25 @@
 
   // ---------- Compose whole page ----------
   function composePage() {
-    // Admin panel prioritization
     const mainHTML = safe(() => {
       if (state.isAdmin && state.page === 'admin') {
         return renderAdminPanel();
       }
       switch (state.page) {
-        case 'home': return renderHomePage();
-        case 'shop': return renderShopPage();
+        case 'home':    return renderHomePage();
+        case 'shop':    return renderShopPage();
         case 'product': return renderProductPage();
-        case 'cart': return renderCartPage();
-        case 'checkout': return renderCheckoutPage();
-        case 'login': return renderLoginPage();
+        case 'cart':    return renderCartPage();
+        case 'checkout':return renderCheckoutPage();
+        case 'login':   return renderLoginPage();
         case 'profile': return renderProfilePage();
-        default: return renderHomePage();
+        default:        return renderHomePage();
       }
     });
 
-    // Overlays (modals)
     const overlays = [
-      state.confirmModal ? safe(() => renderConfirmModal()) : '',
-      state.editProduct !== null ? safe(() => renderProductModal()) : ''
+      state.confirmModal != null ? safe(() => renderConfirmModal()) : '',
+      state.editProduct  != null ? safe(() => renderProductModal()) : ''
     ].join('');
 
     return mainHTML + overlays;
@@ -57,7 +74,10 @@
 
   // ---------- DOM writer with optional view transitions ----------
   function writeHTML(root, html) {
-    const supportsViewTransition = document.startViewTransition && document.documentElement.classList.contains('view-transition');
+    const supportsViewTransition =
+      document.startViewTransition &&
+      document.documentElement.classList.contains('view-transition');
+
     if (supportsViewTransition && lastPage !== state.page) {
       document.startViewTransition(() => {
         root.innerHTML = html;
@@ -79,16 +99,12 @@
 
     const html = composePage();
 
-    // Skip if no changes (prevents unnecessary layout/reflow)
-    if (html === lastHTML) {
-      return;
-    }
+    if (html === lastHTML) return;
 
     writeHTML(appEl, html);
     lastHTML = html;
     lastPage = state.page;
 
-    // Optional: scroll top on page change
     if (state.prevPage !== state.page) {
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
     }
@@ -107,14 +123,12 @@
   // ---------- Initial render ----------
   render();
 
-  // ---------- Optional: subscribe to AppState (if available) ----------
+  // ---------- Optional: subscribe to AppState ----------
   if (window.AppState && typeof window.AppState.subscribe === 'function') {
     window.AppState.subscribe(() => render());
   }
 
   // ---------- Enable view transitions from CSS flag ----------
-  // Add a CSS flag: :root.view-transition or @view-transition { navigation: auto; }
-  // We toggle a class to signal availability.
   try {
     if (CSS && CSS.supports && CSS.supports('view-transition-name: x')) {
       document.documentElement.classList.add('view-transition');

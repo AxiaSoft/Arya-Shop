@@ -1,21 +1,29 @@
 // ═══════════════════════════════════════════════════════════════
-// GLOBAL STATE MANAGEMENT (GPT‑5 Refactor: persistence + events)
+// GLOBAL STATE MANAGEMENT (GPT‑5 FINAL)
+// - Persistent login (user + currentUser + isAdmin)
+// - Unified state store
+// - Auto-render on change
+// - Safe deep merge
 // File: assets/js/global state management.js
 // ═══════════════════════════════════════════════════════════════
+
 (function () {
+
   // ---------- Persistence keys ----------
   const PERSIST_KEYS = [
     'cart',
     'wishlist',
     'user',
+    'currentUser',   // 🔥 اضافه شد — برای حفظ لاگین بعد از رفرش
     'isAdmin',
     'productFilter',
     'userSettings',
     'notifications'
   ];
+
   const LS_KEY = 'premium_store_state_v1';
 
-  // ---------- Default state (mirrors current structure) ----------
+  // ---------- Default state ----------
   const DEFAULT_STATE = {
     // Navigation
     page: 'home',
@@ -37,6 +45,7 @@
 
     // Auth
     user: null,
+    currentUser: null,   // 🔥 اضافه شد
     isAdmin: false,
     loginStep: 'phone',
     loginPhone: '',
@@ -96,7 +105,9 @@
   const safeJSONParse = (str, fallback) => {
     try { return JSON.parse(str); } catch { return fallback; }
   };
+
   const clone = (obj) => JSON.parse(JSON.stringify(obj));
+
   const mergeDeep = (target, source) => {
     if (typeof source !== 'object' || source === null) return target;
     const out = Array.isArray(target) ? [...target] : { ...target };
@@ -113,13 +124,13 @@
 
   // ---------- Event bus ----------
   const subscribers = new Set();
+
   const notify = (payload) => {
     subscribers.forEach((fn) => {
       try { fn(payload); } catch {}
     });
-    // Non-breaking: existing code هنوز خودش render را صدا می‌زند.
+
     if (typeof window.render === 'function') {
-      // جلوگیری از رندرهای پشت‌سرهم
       clearTimeout(notify._t);
       notify._t = setTimeout(() => window.render(), 0);
     }
@@ -135,6 +146,7 @@
     PERSIST_KEYS.forEach((k) => {
       if (k in saved) restored[k] = saved[k];
     });
+
     return restored;
   };
 
@@ -144,7 +156,6 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
   };
 
-  // Throttled save
   const saveThrottled = (() => {
     let t;
     return (state) => {
@@ -155,15 +166,13 @@
 
   // ---------- Create state ----------
   const initial = mergeDeep(clone(DEFAULT_STATE), loadPersisted());
-  // توجه: برای سازگاری با کد فعلی، state آبجکت ساده می‌ماند
   window.state = initial;
 
   // ---------- Public API ----------
   const AppState = {
-    // خواندن امن (کپی)
+
     get() { return clone(window.state); },
 
-    // ادغام بخشی و اعلان
     set(partial) {
       window.state = mergeDeep(window.state, partial);
       saveThrottled(window.state);
@@ -171,7 +180,6 @@
       return window.state;
     },
 
-    // جایگزینی کامل (با احترام به ساختار پیش‌فرض)
     replace(next) {
       window.state = mergeDeep(clone(DEFAULT_STATE), next || {});
       saveThrottled(window.state);
@@ -179,7 +187,6 @@
       return window.state;
     },
 
-    // ریست به مقدار پیش‌فرض (با پاک‌سازی persisted)
     reset() {
       window.state = clone(DEFAULT_STATE);
       try { localStorage.removeItem(LS_KEY); } catch {}
@@ -187,20 +194,21 @@
       return window.state;
     },
 
-    // مشترک شدن در تغییرات
     subscribe(fn) {
       subscribers.add(fn);
       return () => subscribers.delete(fn);
     },
 
-    // ذخیره فوری
     persistNow() { savePersisted(window.state); },
 
-    // کمک‌های کاربردی
     setPage(page, data) {
       window.state.prevPage = window.state.page;
       window.state.page = page;
-      if (data && page === 'product') window.state.selectedProduct = data;
+
+      if (data && page === 'product') {
+        window.state.selectedProduct = data;
+      }
+
       saveThrottled(window.state);
       notify({ type: 'nav:page', page, data });
     },
@@ -215,6 +223,7 @@
   // ---------- Expose ----------
   window.AppState = AppState;
 
-  // ---------- Auto-init notify (first render) ----------
+  // ---------- First render ----------
   notify({ type: 'state:init' });
+
 })();

@@ -39,7 +39,7 @@
       background-attachment: fixed;
     }
     .bg-hero-gradient {
-      background: linear-gradient(135deg, #2a8dff 0%, #002a79 25%, #5596f7 50%, #002a79 75%, #5c78f6 100%);
+      background: linear-gradient(135deg, #2a8dff 0%, #003fb4 25%, #3686ff 50%, #003fb4 75%, #5c78f6 100%);
       background-size: 300% 300%;
       animation: gradientFlow 8s ease infinite;
     }
@@ -371,4 +371,70 @@
   height: 100%;
   padding: 1.5rem;
   overflow-y: auto;
+}
+
+/* 3D floating squares around about images */
+.about-image-wrapper {
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.about-3d-square {
+  position: absolute;
+  border-radius: 1.5rem;
+  filter: blur(1px);
+  transform-style: preserve-3d;
+  transition:
+    transform 0.6s cubic-bezier(.25,.8,.25,1),
+    box-shadow 0.6s cubic-bezier(.25,.8,.25,1),
+    opacity 0.6s;
+}
+
+/* Purple square */
+.square-purple {
+  background: rgba(139, 92, 246, 0.35);
+  animation: floatPurple 5s ease-in-out infinite;
+}
+
+/* Red square */
+.square-red {
+  background: rgba(244, 63, 94, 0.35);
+  animation: floatRed 6s ease-in-out infinite;
+}
+
+/* Hover effect on wrapper */
+.about-image-wrapper:hover .about-3d-square {
+  transform: translateZ(35px) rotate3d(1, 1, 0, 12deg) scale(1.08);
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.25);
+  opacity: 0.95;
+}
+
+/* Floating keyframes */
+@keyframes floatRed {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-14px) rotate(4deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+@keyframes floatPurple {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(12px) rotate(-4deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+/* Animated wave under hero */
+.wave-animated path {
+  animation: waveMove 6s ease-in-out infinite;
+}
+
+@keyframes waveMove {
+  0% {
+    d: path("M0 50C360 0 1080 100 1440 50V100H0V50Z");
+  }
+  50% {
+    d: path("M0 60C360 20 1080 80 1440 60V100H0V60Z");
+  }
+  100% {
+    d: path("M0 50C360 0 1080 100 1440 50V100H0V50Z");
+  }
 }

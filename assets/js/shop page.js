@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// SHOP PAGE (GPT‑5 FINAL, FILTER SIDEBAR FIXED)
-// - سایدبار فیلتر مستقل از منوی همبرگری
-// - باز/بسته شدن با کلاس .open (بدون رندر)
-// - اسلایدر قیمت + فیلتر دسته، سرچ، مرتب‌سازی
+// SHOP PAGE (GPT‑5 FINAL)
+// - فیلتر بدون رندر کامل، فقط آپدیت گرید
+// - بازه قیمت: حداقل ثابت بر اساس دسته، فقط حداکثر با اسلایدر
+// - مرتب‌سازی و دسته‌بندی با دکمه‌های active بدون تکان خوردن صفحه
 // ═══════════════════════════════════════════════════════════════
 
 function toggleFilterSidebar() {
@@ -11,44 +11,9 @@ function toggleFilterSidebar() {
   sidebar.classList.toggle('open');
 }
 
-function updatePriceSlider() {
-  const minEl = document.getElementById('priceMin');
-  const maxEl = document.getElementById('priceMax');
-  if (!minEl || !maxEl) return;
-
-  let min = Number(minEl.value);
-  let max = Number(maxEl.value);
-
-  if (min > max) {
-    [min, max] = [max, min];
-    minEl.value = min;
-    maxEl.value = max;
-  }
-
-  const minLabel = document.getElementById('priceMinLabel');
-  const maxLabel = document.getElementById('priceMaxLabel');
-
-  if (minLabel) minLabel.innerText = utils.formatPrice(min);
-  if (maxLabel) maxLabel.innerText = utils.formatPrice(max);
-
-  state.productFilter.minPrice = min;
-  state.productFilter.maxPrice = max;
-
-  render();
-}
-
-function renderShopPage() {
+// بر اساس state.productFilter، لیست محصولات فیلتر و مرتب می‌شود
+function getFilteredProducts() {
   const products = state.products || [];
-  const prices = products.map(p => Number(p.price) || 0);
-
-  let autoMinPrice = 0;
-  let autoMaxPrice = 0;
-
-  if (prices.length > 0) {
-    autoMinPrice = Math.min(...prices);
-    autoMaxPrice = Math.max(...prices);
-  }
-
   let filteredProducts = [...products];
 
   if (state.productFilter.category) {
@@ -58,10 +23,10 @@ function renderShopPage() {
   }
 
   if (state.productFilter.search) {
-    const s = state.productFilter.search.toLowerCase();
+    const s = (state.productFilter.search || '').toLowerCase();
     filteredProducts = filteredProducts.filter(
       p =>
-        p.title.toLowerCase().includes(s) ||
+        (p.title || '').toLowerCase().includes(s) ||
         (p.description || '').toLowerCase().includes(s)
     );
   }
@@ -94,11 +59,161 @@ function renderShopPage() {
       );
   }
 
+  return filteredProducts;
+}
+
+// فقط HTML بخش محصولات (گرید یا حالت خالی)
+function renderShopProductsOnly() {
+  const filteredProducts = getFilteredProducts();
+
+  if (filteredProducts.length > 0) {
+    return `
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        ${filteredProducts.map((p, i) => renderProductCard(p, i)).join('')}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="glass rounded-3xl p-16 text-center">
+      <div class="text-7xl mb-6">🔍</div>
+      <h3 class="text-2xl font-bold mb-3">محصولی یافت نشد</h3>
+      <p class="text-white/60 mb-6">فیلترهای جستجو را تغییر دهید</p>
+      <button
+        onclick="state.productFilter={category:'',search:'',sort:'newest',minPrice:'',maxPrice:''}; updateShopProductsOnly(true); updateSortButtonsUI(); updateCategoryButtonsUI()"
+        class="btn-primary px-8 py-3 rounded-xl font-semibold"
+        type="button"
+      >پاک کردن فیلترها</button>
+    </div>
+  `;
+}
+
+// آپدیت فقط گرید محصولات + تعداد + در صورت نیاز اسلایدر
+function updateShopProductsOnly(resetSliders = false) {
+  const container = document.getElementById('shop-products-container');
+  if (!container) return;
+
+  container.innerHTML = renderShopProductsOnly();
+
+  const countEl = document.getElementById('shop-products-count');
+  if (countEl) {
+    const filteredProducts = getFilteredProducts();
+    countEl.textContent = `${filteredProducts.length} محصول`;
+  }
+
+  if (resetSliders) {
+    const products = state.products || [];
+    const baseList = state.productFilter.category
+      ? products.filter(p => p.category === state.productFilter.category)
+      : products;
+
+    const prices = baseList.map(p => Number(p.price) || 0);
+    if (prices.length > 0) {
+      const autoMinPrice = Math.min(...prices);
+      const autoMaxPrice = Math.max(...prices);
+
+      const maxEl = document.getElementById('priceMax');
+      const maxLabel = document.getElementById('priceMaxLabel');
+
+      if (maxEl) maxEl.value = autoMaxPrice;
+      if (maxLabel) maxLabel.innerText = utils.formatPrice(autoMaxPrice);
+
+      state.productFilter.minPrice = autoMinPrice;
+      state.productFilter.maxPrice = autoMaxPrice;
+    } else {
+      state.productFilter.minPrice = '';
+      state.productFilter.maxPrice = '';
+    }
+  }
+}
+
+// دکمه‌های مرتب‌سازی را بر اساس state.productFilter.sort فعال/غیرفعال می‌کند
+function updateSortButtonsUI() {
+  document.querySelectorAll(".sort-btn").forEach(btn => {
+    const val = btn.getAttribute("data-sort");
+
+    if (val === state.productFilter.sort) {
+      btn.classList.add(
+        "bg-emerald-500/20",
+        "text-emerald-400",
+        "border",
+        "border-emerald-500/50"
+      );
+      btn.classList.remove("bg-white/5", "text-white/60");
+    } else {
+      btn.classList.remove(
+        "bg-emerald-500/20",
+        "text-emerald-400",
+        "border",
+        "border-emerald-500/50"
+      );
+      btn.classList.add("bg-white/5", "text-white/60");
+    }
+  });
+}
+
+// دکمه‌های دسته‌بندی را بر اساس state.productFilter.category فعال/غیرفعال می‌کند
+function updateCategoryButtonsUI() {
+  document.querySelectorAll(".cat-btn").forEach(btn => {
+    const val = btn.getAttribute("data-category");
+
+    const isActive =
+      (val && val === state.productFilter.category) ||
+      (!val && !state.productFilter.category);
+
+    if (isActive) {
+      btn.classList.add("bg-violet-500", "text-white", "shadow-lg");
+      btn.classList.remove("glass", "hover:bg-white/10", "text-white/60");
+    } else {
+      btn.classList.remove("bg-violet-500", "text-white", "shadow-lg");
+      btn.classList.add("glass", "hover:bg-white/10");
+    }
+  });
+}
+
+// اسلایدر قیمت: فقط حداکثر قیمت را تغییر می‌دهد
+function updatePriceSlider() {
+  const maxEl = document.getElementById('priceMax');
+  if (!maxEl) return;
+
+  const max = Number(maxEl.value);
+
+  state.productFilter.maxPrice = max;
+
+  const maxLabel = document.getElementById('priceMaxLabel');
+  if (maxLabel) maxLabel.innerText = utils.formatPrice(max);
+
+  updateShopProductsOnly();
+}
+
+function renderShopPage() {
+  const products = state.products || [];
+
+  // بازه قیمت بر اساس دسته فعال
+  const baseList = state.productFilter.category
+    ? products.filter(p => p.category === state.productFilter.category)
+    : products;
+
+  const prices = baseList.map(p => Number(p.price) || 0);
+
+  let autoMinPrice = 0;
+  let autoMaxPrice = 0;
+
+  if (prices.length > 0) {
+    autoMinPrice = Math.min(...prices);
+    autoMaxPrice = Math.max(...prices);
+  }
+
+  // حداقل قیمت همیشه ثابت (بر اساس دسته/کل)
+  state.productFilter.minPrice = autoMinPrice || 0;
+
+  const filteredProducts = getFilteredProducts();
+
   const activeCategory = state.categories.find(
     c => c.id === state.productFilter.category
   );
 
-  return `
+  const html = `
     ${renderHeader()}
     
     <main class="max-w-7xl mx-auto px-4 lg:px-8 py-8 lg:py-12">
@@ -119,7 +234,7 @@ function renderShopPage() {
             <h1 class="text-2xl lg:text-4xl font-black">
               ${activeCategory ? activeCategory.title : 'همه محصولات'}
             </h1>
-            <p class="text-white/60 mt-2">${filteredProducts.length} محصول</p>
+            <p class="text-white/60 mt-2" id="shop-products-count">${filteredProducts.length} محصول</p>
           </div>
           <button
             onclick="toggleFilterSidebar()"
@@ -147,7 +262,7 @@ function renderShopPage() {
                 type="text"
                 placeholder="جستجوی محصول..."
                 value="${state.productFilter.search}"
-                oninput="state.productFilter.search=this.value; render()"
+                oninput="state.productFilter.search=this.value; updateShopProductsOnly()"
                 class="w-full input-style pr-14"
               >
             </div>
@@ -158,8 +273,9 @@ function renderShopPage() {
             <h4 class="text-sm text-white/70 mb-3">دسته‌بندی</h4>
             <div class="flex flex-wrap gap-2">
               <button 
-                onclick="state.productFilter.category=''; render()"
-                class="px-4 py-2.5 rounded-xl text-sm font-medium ${
+                data-category=""
+                onclick="state.productFilter.category=''; updateShopProductsOnly(true); updateCategoryButtonsUI()"
+                class="cat-btn px-4 py-2.5 rounded-xl text-sm font-medium ${
                   !state.productFilter.category
                     ? 'bg-violet-500 text-white shadow-lg'
                     : 'glass hover:bg-white/10'
@@ -171,8 +287,9 @@ function renderShopPage() {
                 .map(
                   cat => `
                 <button 
-                  onclick="state.productFilter.category='${cat.id}'; render()"
-                  class="px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 ${
+                  data-category="${cat.id}"
+                  onclick="state.productFilter.category='${cat.id}'; updateShopProductsOnly(true); updateCategoryButtonsUI()"
+                  class="cat-btn px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 ${
                     state.productFilter.category === cat.id
                       ? 'bg-violet-500 text-white shadow-lg'
                       : 'glass hover:bg-white/10'
@@ -201,8 +318,9 @@ function renderShopPage() {
                 .map(
                   opt => `
                 <button 
-                  onclick="state.productFilter.sort='${opt.value}'; render()"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium ${
+                  data-sort="${opt.value}"
+                  onclick="state.productFilter.sort='${opt.value}'; updateShopProductsOnly(); updateSortButtonsUI()"
+                  class="sort-btn px-3 py-1.5 rounded-lg text-xs font-medium ${
                     state.productFilter.sort === opt.value
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
                       : 'bg-white/5 text-white/60 hover:bg-white/10'
@@ -215,22 +333,12 @@ function renderShopPage() {
             </div>
           </div>
 
-          <!-- Price Slider -->
+          <!-- Price (only max slider, min fixed) -->
           ${
             prices.length > 0
               ? `
           <div class="glass rounded-2xl p-4 border border-white/10 mb-6">
             <h4 class="text-sm text-white/70 mb-3">بازه قیمت</h4>
-
-            <input
-              type="range"
-              id="priceMin"
-              min="${autoMinPrice}"
-              max="${autoMaxPrice}"
-              value="${state.productFilter.minPrice || autoMinPrice}"
-              oninput="updatePriceSlider()"
-              class="w-full mb-3"
-            >
 
             <input
               type="range"
@@ -243,7 +351,7 @@ function renderShopPage() {
             >
 
             <div class="flex justify-between text-white/70 text-sm mt-2">
-              <span id="priceMinLabel">${utils.formatPrice(state.productFilter.minPrice || autoMinPrice)}</span>
+              <span>${utils.formatPrice(autoMinPrice)}</span>
               <span id="priceMaxLabel">${utils.formatPrice(state.productFilter.maxPrice || autoMaxPrice)}</span>
             </div>
           </div>
@@ -256,36 +364,27 @@ function renderShopPage() {
             <button class="btn-success px-4 py-2 rounded-xl" onclick="toggleFilterSidebar()" type="button">اعمال</button>
             <button
               class="btn-ghost px-4 py-2 rounded-xl"
-              onclick="state.productFilter={category:'',search:'',sort:'newest',minPrice:'',maxPrice:''}; render()"
+              onclick="state.productFilter={category:'',search:'',sort:'newest',minPrice:'',maxPrice:''}; updateShopProductsOnly(true); updateSortButtonsUI(); updateCategoryButtonsUI()"
               type="button"
             >پاک‌سازی</button>
           </div>
         </div>
       </div>
 
-      <!-- Products Grid -->
-      ${
-        filteredProducts.length > 0
-          ? `
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-          ${filteredProducts.map((p, i) => renderProductCard(p, i)).join('')}
-        </div>
-      `
-          : `
-        <div class="glass rounded-3xl p-16 text-center">
-          <div class="text-7xl mb-6">🔍</div>
-          <h3 class="text-2xl font-bold mb-3">محصولی یافت نشد</h3>
-          <p class="text-white/60 mb-6">فیلترهای جستجو را تغییر دهید</p>
-          <button
-            onclick="state.productFilter={category:'',search:'',sort:'newest',minPrice:'',maxPrice:''}; render()"
-            class="btn-primary px-8 py-3 rounded-xl font-semibold"
-            type="button"
-          >پاک کردن فیلترها</button>
-        </div>
-      `
-      }
+      <!-- Products Container (dynamic) -->
+      <div id="shop-products-container">
+        ${renderShopProductsOnly()}
+      </div>
     </main>
     
     ${renderFooter()}
   `;
+
+  // بعد از اولین رندر، مطمئن شو دکمه‌های مرتب‌سازی و دسته‌بندی درست استایل شده‌اند
+  setTimeout(() => {
+    updateSortButtonsUI();
+    updateCategoryButtonsUI();
+  }, 0);
+
+  return html;
 }

@@ -1,9 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FOOTER COMPONENT (GPT‑5 Final)
-// - سال شمسی دقیق با Intl
-// - سوشال‌ها از socialLinks
-// - نمادها از trustBadges (داینامیک و ریسپانسیو)
-// - Google Maps با لینک Embed صحیح
+// - فقط بهبود سایز نمادها (ریسپانسیو، بدون تغییر رفتار دیگر)
 // File: assets/js/footer component.js
 // ═══════════════════════════════════════════════════════════════
 (function () {
@@ -102,13 +99,21 @@
               ${badges.length === 0
                 ? `
                 <div class="flex flex-wrap items-center gap-3">
-  ${trustBadges.map(b => `
-    <img src="${b.img}" alt="${b.alt}" class="h-12 w-auto rounded-lg glass p-1">
-  `).join('')}
-</div>
+                  ${trustBadges.map(b => `
+                    <img 
+                      src="${b.img}" 
+                      alt="${b.alt}" 
+                      class="h-10 w-10 md:h-12 md:w-12 lg:h-14 lg:w-14 object-contain rounded-lg glass p-1"
+                    >
+                  `).join('')}
+                </div>
                 `
                 : badges.map(b => `
-                  <img src="${b.img}" alt="${b.alt || ''}" class="h-10 w-auto rounded-lg glass p-1">
+                  <img 
+                    src="${b.img}" 
+                    alt="${b.alt || ''}" 
+                    class="h-10 w-10 md:h-12 md:w-12 lg:h-14 lg:w-14 object-contain rounded-lg glass p-1"
+                  >
                 `).join('')}
             </div>
           </div>

@@ -438,3 +438,209 @@
     d: path("M0 50C360 0 1080 100 1440 50V100H0V50Z");
   }
 }
+
+/* ───────── Bottom Sheet: Mobile Admin Tabs ───────── */
+
+.admin-sheet-trigger {
+  position: fixed;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 65;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  color: rgba(226, 232, 240, 0.95);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.9);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease-out,
+    box-shadow 0.2s ease-out,
+    opacity 0.2s ease-out;
+}
+
+.admin-sheet-trigger span.icon {
+  font-size: 14px;
+}
+
+.admin-sheet-trigger:hover {
+  transform: translateX(-50%) translateY(-1px);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.95);
+}
+
+.admin-sheet-trigger.hidden-trigger {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Backdrop */
+
+.admin-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.85));
+  backdrop-filter: blur(10px);
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+.admin-sheet-backdrop.sheet-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Sheet */
+
+.admin-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50vh;
+  max-height: 480px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(18px);
+  border-radius: 18px 18px 0 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 -18px 40px rgba(15, 23, 42, 0.9);
+  z-index: 70;
+  transform: translateY(100%);
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform 0.32s cubic-bezier(0.18, 0.89, 0.32, 1.28),
+    box-shadow 0.25s ease-out;
+  touch-action: none;
+}
+
+.admin-sheet.sheet-open {
+  transform: translateY(0%);
+}
+
+.admin-sheet.sheet-dragging {
+  transition: none;
+  box-shadow: 0 -10px 26px rgba(15, 23, 42, 0.7);
+}
+
+/* Header & handle */
+
+.admin-sheet-header {
+  padding: 10px 16px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+}
+
+.admin-sheet-header:active {
+  cursor: grabbing;
+}
+
+.admin-sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.7);
+  position: relative;
+}
+
+.admin-sheet-handle::before {
+  content: "";
+  position: absolute;
+  inset: -8px -16px;
+}
+
+.admin-sheet-toggle-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: rgba(148, 163, 184, 0.9);
+  transition: transform 0.25s ease-out;
+}
+
+.admin-sheet.sheet-open .admin-sheet-toggle-icon {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* Body */
+
+.admin-sheet-body {
+  padding: 8px 12px 12px;
+  overflow-y: auto;
+}
+
+/* Tabs inside sheet */
+
+.admin-sheet-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-sheet-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.9);
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid transparent;
+  transition:
+    background 0.18s ease-out,
+    border-color 0.18s ease-out,
+    transform 0.12s ease-out;
+}
+
+.admin-sheet-tab-btn span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-sheet-tab-btn .tab-icon {
+  font-size: 18px;
+}
+
+.admin-sheet-tab-btn.active {
+  background: rgba(129, 140, 248, 0.18);
+  border-color: rgba(129, 140, 248, 0.7);
+  transform: translateY(-1px);
+}
+
+.admin-sheet-tab-btn:active {
+  transform: translateY(0);
+}
+
+.admin-sheet-tab-badge {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(248, 113, 113, 0.9);
+  color: #fff;
+  text-align: center;
+}
+
+/* Only mobile */
+
+@media (min-width: 1024px) {
+  .admin-sheet,
+  .admin-sheet-backdrop,
+  .admin-sheet-trigger {
+    display: none !important;
+  }
+}

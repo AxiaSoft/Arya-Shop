@@ -1,10 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// ADMIN PANEL (GPT‑5 FINAL)
-// - Per‑product reviews management (safe, no render errors)
-// - New support messenger (scrollable on mobile)
-// - Categories modal CRUD
-// - Products pro editor (from admin product.txt)
-// - Orders safe renderer
+// ADMIN PANEL (GPT‑5 FINAL + MOBILE BOTTOM SHEET MENU)
 // File: assets/js/admin panel.js
 // ═══════════════════════════════════════════════════════════════
 
@@ -13,7 +8,6 @@
 state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
 state.adminReviewsSelectedProductId = state.adminReviewsSelectedProductId || null;
 
-// Support filters + selection + quick replies
 state.supportFilter = state.supportFilter || { status: '', priority: '', view: 'all' };
 state.adminSupportSelectedTicketId = state.adminSupportSelectedTicketId || null;
 state.supportQuickReplies = Array.isArray(state.supportQuickReplies)
@@ -27,7 +21,19 @@ state.orderFilter = state.orderFilter || { status: '' };
 state.adminTab = state.adminTab || 'dashboard';
 
 state.categoryModal = state.categoryModal || null;
-state.tickets = Array.isArray(state.tickets) ? state.tickets : [];
+
+// Bottom sheet state (mobile)
+state.sheet = state.sheet || {
+  open: false,
+  dragging: false,
+  progress: 0 // 0 = بسته، 1 = باز (نیم صفحه)
+};
+
+let _sheetDrag = {
+  active: false,
+  startY: 0,
+  startProgress: 0
+};
 
 /* ========== Root admin panel renderer ========== */
 
@@ -43,9 +49,19 @@ function renderAdminPanel() {
 
   const pendingReviewsCount = (state.reviews || []).filter(r => r.status === 'pending').length;
 
+  const sheetProgress =
+    typeof state.sheet.progress === 'number'
+      ? state.sheet.progress
+      : state.sheet.open
+      ? 1
+      : 0;
+  const sheetTranslateY = (1 - sheetProgress) * 100;
+
+  const showTrigger = !state.sheet.open;
+
   return `
     <div class="flex flex-col lg:flex-row min-h-screen">
-      <!-- Sidebar -->
+      <!-- Sidebar (Desktop) -->
       <aside class="hidden lg:flex w-72 glass-dark border-l border-white/5 flex-col fixed right-0 top-0 h-screen overflow-y-auto">
         <div class="p-6 border-b border-white/5">
           <div class="flex items-center gap-3">
@@ -106,75 +122,155 @@ function renderAdminPanel() {
 
       <!-- Main Content -->
       <main class="flex-1 p-4 lg:p-8 overflow-auto overflow-x-hidden pb-24 lg:pb-8 lg:mr-72 mr-0">
-        ${state.adminTab === 'dashboard' ? renderAdminDashboard() : ''}
-        ${state.adminTab === 'products' ? renderAdminProductsEditor() : ''}
+        ${state.adminTab === 'dashboard' ? (typeof renderAdminDashboard === 'function' ? renderAdminDashboard() : '') : ''}
+        ${state.adminTab === 'products' ? (typeof renderAdminProductsEditor === 'function' ? renderAdminProductsEditor() : '') : ''}
         ${state.adminTab === 'orders' ? renderAdminOrdersSafe() : ''}
         ${state.adminTab === 'categories' ? renderAdminCategoriesEditor() : ''}
         ${state.adminTab === 'reviews' ? renderAdminReviews() : ''}
         ${state.adminTab === 'support' ? renderAdminSupportSafe() : ''}
       </main>
 
-      <!-- Mobile Navigation -->
-      <nav class="lg:hidden fixed bottom-0 left-0 right-0 glass-dark border-t border-white/5 px-4 py-3 z-50 safe-bottom">
-        <div class="flex justify-around">
-          ${tabs
-            .map(
-              tab => `
-            <button 
-              onclick="state.adminTab='${tab.id}'; render()"
-              class="flex flex-col items-center py-2 px-5 rounded-xl transition-all ${
-                state.adminTab === tab.id ? 'bg-violet-500/20 text-violet-400' : 'text-white/60'
-              }" type="button"
-            >
-              <span class="relative text-xl mb-0.5">
-                ${tab.icon}
-                ${
-                  tab.id === 'reviews' && pendingReviewsCount > 0
-                    ? `<span class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] px-1 py-0.5 rounded-full">
-                        ${pendingReviewsCount}
-                       </span>`
-                    : ''
-                }
-              </span>
-              <span class="text-[10px] font-medium">${tab.label}</span>
-            </button>
-          `
-            )
-            .join('')}
+      <!-- Mobile Bottom Sheet Trigger -->
+      <button
+        type="button"
+        class="admin-sheet-trigger lg:hidden ${showTrigger ? '' : 'hidden-trigger'}"
+        onclick="sheetToggle(true)"
+      >
+        <span class="icon">⬆️</span>
+        <span>بخش‌های پنل مدیریت</span>
+      </button>
+
+      <!-- Mobile Bottom Sheet Backdrop -->
+      <div 
+        class="admin-sheet-backdrop ${state.sheet.open ? 'sheet-open' : ''} lg:hidden"
+        onclick="sheetToggle(false)"
+      ></div>
+
+      <!-- Mobile Bottom Sheet (Tabs) -->
+      <div 
+        class="admin-sheet lg:hidden ${state.sheet.open ? 'sheet-open' : ''} ${state.sheet.dragging ? 'sheet-dragging' : ''}"
+        style="transform: translateY(${sheetTranslateY}%);"
+        onmousedown="sheetDragStart(event)"
+        ontouchstart="sheetDragStart(event)"
+      >
+        <div class="admin-sheet-header">
+          <div class="admin-sheet-handle"></div>
+          <div class="admin-sheet-toggle-icon" onclick="sheetToggle()">
+            ▲
+          </div>
         </div>
-      </nav>
+        <div class="admin-sheet-body">
+          <div class="admin-sheet-tabs">
+            ${tabs
+              .map(tab => `
+                <button
+                  type="button"
+                  class="admin-sheet-tab-btn ${state.adminTab === tab.id ? 'active' : ''}"
+                  onclick="state.adminTab='${tab.id}'; sheetToggle(false);"
+                >
+                  <span>
+                    <span class="tab-icon">${tab.icon}</span>
+                    <span>${tab.label}</span>
+                  </span>
+                  ${
+                    tab.id === 'reviews' && pendingReviewsCount > 0
+                      ? `<span class="admin-sheet-tab-badge">${pendingReviewsCount}</span>`
+                      : ''
+                  }
+                </button>
+              `)
+              .join('')}
+          </div>
+        </div>
+      </div>
 
       ${renderCategoryModal()}
     </div>
   `;
 }
 
-/* ========== Minimal dashboard (to avoid render errors) ========== */
+/* ========== Bottom sheet logic (mobile) ========== */
 
-function renderAdminDashboard() {
-  const productsCount = (state.products || []).length;
-  const ordersCount = (state.orders || []).length;
-  const reviewsCount = (state.reviews || []).length;
+function sheetToggle(forceOpen) {
+  const nextOpen =
+    typeof forceOpen === 'boolean'
+      ? forceOpen
+      : !state.sheet.open;
 
-  return `
-    <div class="animate-fade">
-      <h1 class="text-2xl lg:text-3xl font-black mb-6">داشبورد</h1>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="glass rounded-2xl p-4">
-          <p class="text-xs text-white/60 mb-1">محصولات</p>
-          <p class="text-2xl font-black">${productsCount}</p>
-        </div>
-        <div class="glass rounded-2xl p-4">
-          <p class="text-xs text-white/60 mb-1">سفارشات</p>
-          <p class="text-2xl font-black">${ordersCount}</p>
-        </div>
-        <div class="glass rounded-2xl p-4">
-          <p class="text-xs text-white/60 mb-1">نظرات</p>
-          <p class="text-2xl font-black">${reviewsCount}</p>
-        </div>
-      </div>
-    </div>
-  `;
+  state.sheet.open = nextOpen;
+  state.sheet.dragging = false;
+  state.sheet.progress = nextOpen ? 1 : 0;
+  render();
+}
+
+function sheetDragStart(e) {
+  const isTouch = e.type === 'touchstart';
+  const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+  _sheetDrag.active = true;
+  _sheetDrag.startY = clientY;
+  _sheetDrag.startProgress =
+    typeof state.sheet.progress === 'number'
+      ? state.sheet.progress
+      : state.sheet.open
+      ? 1
+      : 0;
+
+  state.sheet.dragging = true;
+
+  if (!isTouch) {
+    window.addEventListener('mousemove', sheetDragMove);
+    window.addEventListener('mouseup', sheetDragEnd);
+  } else {
+    window.addEventListener('touchmove', sheetDragMove, { passive: false });
+    window.addEventListener('touchend', sheetDragEnd);
+    window.addEventListener('touchcancel', sheetDragEnd);
+  }
+}
+
+function sheetDragMove(e) {
+  if (!_sheetDrag.active) return;
+
+  const isTouch = e.type === 'touchmove';
+  const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+  if (isTouch) e.preventDefault();
+
+  const dy = clientY - _sheetDrag.startY;
+  const sheetHeight = Math.min(window.innerHeight * 0.5, 480);
+  const delta = dy / sheetHeight;
+
+  let p = _sheetDrag.startProgress - delta;
+  if (p < 0) p = 0;
+  if (p > 1) p = 1;
+
+  state.sheet.progress = p;
+  render();
+}
+
+function sheetDragEnd() {
+  if (!_sheetDrag.active) return;
+  _sheetDrag.active = false;
+
+  const p =
+    typeof state.sheet.progress === 'number'
+      ? state.sheet.progress
+      : state.sheet.open
+      ? 1
+      : 0;
+
+  const shouldOpen = p > 0.5;
+  state.sheet.open = shouldOpen;
+  state.sheet.progress = shouldOpen ? 1 : 0;
+  state.sheet.dragging = false;
+
+  window.removeEventListener('mousemove', sheetDragMove);
+  window.removeEventListener('mouseup', sheetDragEnd);
+  window.removeEventListener('touchmove', sheetDragMove);
+  window.removeEventListener('touchend', sheetDragEnd);
+  window.removeEventListener('touchcancel', sheetDragEnd);
+
+  render();
 }
 
 /* ========== Helper wrapper to align legacy select to new API ========== */
@@ -195,10 +291,10 @@ function openCategoryModal(mode, id = null) {
       selectedProducts: []
     };
   } else {
-    const cat = (state.categories || []).find(c => c.id === id);
+    const cat = state.categories.find(c => c.id === id);
     if (!cat) return;
 
-    const selectedProducts = (state.products || []).filter(p => p.category === id).map(p => p.id);
+    const selectedProducts = state.products.filter(p => p.category === id).map(p => p.id);
 
     state.categoryModal = {
       mode: 'edit',
@@ -225,13 +321,11 @@ function saveCategoryModal() {
     return;
   }
 
-  state.categories = Array.isArray(state.categories) ? state.categories : [];
-
   if (m.mode === 'add') {
     const id = utils.generateId();
     state.categories.push({ id, title });
 
-    (state.products || []).forEach(p => {
+    state.products.forEach(p => {
       if (m.selectedProducts.includes(p.id)) {
         p.category = id;
       }
@@ -244,11 +338,11 @@ function saveCategoryModal() {
 
     cat.title = title;
 
-    (state.products || []).forEach(p => {
+    state.products.forEach(p => {
       if (p.category === m.id) p.category = '';
     });
 
-    (state.products || []).forEach(p => {
+    state.products.forEach(p => {
       if (m.selectedProducts.includes(p.id)) {
         p.category = m.id;
       }
@@ -261,7 +355,7 @@ function saveCategoryModal() {
 }
 
 function deleteCategoryWithConfirm(id) {
-  const cat = (state.categories || []).find(c => c.id === id);
+  const cat = state.categories.find(c => c.id === id);
   if (!cat) return;
 
   state.categoryModal = null;
@@ -274,8 +368,8 @@ function deleteCategoryWithConfirm(id) {
     confirmText: 'حذف',
     confirmClass: 'btn-danger',
     onConfirm: () => {
-      state.categories = (state.categories || []).filter(c => c.id !== id);
-      (state.products || []).forEach(p => {
+      state.categories = state.categories.filter(c => c.id !== id);
+      state.products.forEach(p => {
         if (p.category === id) p.category = '';
       });
       state.confirmModal = null;
@@ -289,8 +383,7 @@ function renderCategoryModal() {
   const m = state.categoryModal;
   if (!m) return '';
 
-  const products = Array.isArray(state.products) ? state.products : [];
-  const uncategorized = products.filter(p => !p.category || p.category === m.id);
+  const uncategorized = state.products.filter(p => !p.category || p.category === m.id);
 
   return `
     <div class="fixed inset-0 z-[200] flex items-center justify-center p-4 modal-overlay">
@@ -395,18 +488,17 @@ function renderCategoryModal() {
 }
 
 function renderAdminCategoriesEditor() {
-  const categories = Array.isArray(state.categories) ? state.categories : [];
   return `
     <div class="animate-fade">
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl lg:text-3xl font-black">مدیریت دسته‌بندی‌ها (${categories.length})</h1>
+        <h1 class="text-2xl lg:text-3xl font-black">مدیریت دسته‌بندی‌ها (${state.categories.length})</h1>
         <button class="btn-primary px-5 py-3 rounded-xl font-semibold text-sm" type="button" onclick="openCategoryModal('add')">
           افزودن دسته
         </button>
       </div>
 
       <div class="grid gap-3">
-        ${categories
+        ${(state.categories || [])
           .map(
             (c, i) => `
           <div class="glass rounded-xl p-4 flex items-center justify-between animate-fade" style="animation-delay:${i *
@@ -428,11 +520,10 @@ function renderAdminCategoriesEditor() {
   `;
 }
 
-/* ========== Orders: safe render (handles items array or JSON string) ========== */
+/* ========== Orders: safe render ========== */
 
 function renderAdminOrdersSafe() {
-  const orders = Array.isArray(state.orders) ? state.orders : [];
-  let filteredOrders = [...orders];
+  let filteredOrders = Array.isArray(state.orders) ? [...state.orders] : [];
   if (state.orderFilter.status) {
     filteredOrders = filteredOrders.filter(o => o.status === state.orderFilter.status);
   }
@@ -541,711 +632,7 @@ function renderAdminOrdersSafe() {
   `;
 }
 
-/* ========== Products: list + pro editor (from admin product.txt) ========== */
-
-// فقط این نسخه از رندر لیست محصولات استفاده می‌شود
-function renderAdminProductsEditor() {
-  initProductDraft();
-  if (state.editProduct) syncDraftFromEditing();
-
-  const products = Array.isArray(state.products) ? state.products : [];
-
-  return `
-    <div class="animate-fade">
-      <div class="flex items-center justify-between mb-8">
-        <h1 class="text-2xl lg:text-3xl font-black">محصولات (${products.length})</h1>
-        <button 
-          onclick="state.editProduct = {}; state.productDraft={title:'',category:'',price:0,stock:0,description:'',mainImage:'',gallery:[],original_price:0,_synced:null}; render()"
-          class="btn-primary px-5 py-3 rounded-xl flex items-center gap-2 text-sm font-semibold"
-        >
-          <span>+</span>
-          <span>افزودن محصول</span>
-        </button>
-      </div>
-      
-      ${
-        products.length > 0
-          ? `
-        <div class="grid gap-4">
-          ${products
-            .map((product, i) => {
-              const imgSrc = product.image || product.main_image || '';
-              const hasImage = !!imgSrc;
-              const price = Number(product.price || 0);
-              const original = Number(product.original_price || 0);
-              const hasDiscount = original > price && price > 0;
-              const discountPercent = hasDiscount
-                ? Math.round(((original - price) / original) * 100)
-                : 0;
-
-              return `
-              <div class="glass rounded-2xl p-5 flex items-center gap-4 animate-fade" style="animation-delay: ${i *
-                0.05}s">
-                <div class="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                  ${
-                    hasImage
-                      ? `<img src="${imgSrc}" alt="${product.title}" class="w-full h-full object-cover">`
-                      : `<span class="text-3xl">📦</span>`
-                  }
-                </div>
-                
-                <div class="flex-1 min-w-0">
-                  <h3 class="font-bold truncate">${product.title}</h3>
-                  <p class="text-white/60 text-sm">
-                    ${(state.categories || []).find(c => c.id === product.category)?.title || 'بدون دسته'}
-                  </p>
-                </div>
-                
-                <div class="text-left hidden sm:block">
-                  ${
-                    hasDiscount
-                      ? `
-                        <div class="flex items-center gap-2">
-                          <span class="text-emerald-400 font-bold">${utils.formatPrice(price)}</span>
-                          <span class="price-original text-xs">${utils.formatPrice(original)}</span>
-                        </div>
-                        <div class="mt-1">
-                          <span class="badge badge-discount text-[10px]">${discountPercent}% تخفیف</span>
-                        </div>
-                      `
-                      : `<p class="text-emerald-400 font-bold">${utils.formatPrice(price)}</p>`
-                  }
-                  <p class="text-xs text-white/60 mt-1">موجودی: ${product.stock || 0}</p>
-                </div>
-                
-                <div class="flex gap-2">
-                  <button 
-                    onclick="state.editProduct = (state.products || []).find(p => p.id === '${product.id}'); render()"
-                    class="p-3 glass rounded-xl hover:bg-white/10 transition-all"
-                    aria-label="ویرایش"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    onclick="
-                      state.editProduct = null;
-                      state.confirmModal = { 
-                        type: 'delete-product', 
-                        title: 'حذف محصول', 
-                        message: 'آیا از حذف «${product.title}» مطمئن هستید؟', 
-                        icon: '🗑️', 
-                        confirmText: 'حذف', 
-                        confirmClass: 'btn-danger', 
-                        onConfirm: () => { 
-                          deleteProduct('${product.id}');
-                          state.confirmModal = null;
-                          render();
-                        } 
-                      }; 
-                      render();
-                    "
-                    class="p-3 glass rounded-xl hover:bg-rose-500/20 text-rose-400 transition-all"
-                    aria-label="حذف"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            `;
-            })
-            .join('')}
-        </div>
-      `
-          : `
-        <div class="glass rounded-3xl p-16 text-center">
-          <div class="text-7xl mb-6 animate-float">📦</div>
-          <h3 class="text-2xl font-bold mb-4">محصولی ثبت نشده است</h3>
-          <p class="text-white/60 mb-6">اولین محصول خود را اضافه کنید</p>
-          <button 
-            onclick="state.editProduct = {}; state.productDraft={title:'',category:'',price:0,stock:0,description:'',mainImage:'',gallery:[],original_price:0,_synced:null}; render()"
-            class="btn-primary px-8 py-4 rounded-xl font-bold"
-          >
-            افزودن محصول
-          </button>
-        </div>
-      `
-      }
-
-      ${state.editProduct ? renderProductModal() : ''}
-    </div>
-  `;
-}
-
-/* ========== Products: pro editor helpers ========== */
-
-function initProductDraft() {
-  if (!state.productDraft) {
-    state.productDraft = {
-      title: '',
-      category: '',
-      price: 0,
-      stock: 0,
-      description: '',
-      mainImage: '',
-      gallery: [],
-      original_price: 0,
-      _synced: null
-    };
-  }
-}
-
-function syncDraftFromEditing() {
-  const p = state.editProduct;
-  if (!p) return;
-  const d = state.productDraft;
-  if (d._synced === p.id) return;
-  d.title = p.title || '';
-  d.category = p.category || '';
-  d.price = Number(p.price || 0);
-  d.stock = Number(p.stock || 0);
-  d.description = p.description || '';
-  d.mainImage = p.main_image || p.image || '';
-  d.gallery = Array.isArray(p.images) ? [...p.images] : [];
-  d.original_price = Number(p.original_price || 0);
-  d._synced = p.id;
-}
-
-function readImageFile(file) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.readAsDataURL(file);
-  });
-}
-
-async function handleMainImageFiles(files) {
-  const file = files[0];
-  if (!file) return;
-  const dataUrl = await readImageFile(file);
-  state.productDraft.mainImage = dataUrl;
-  toast('تصویر اصلی تنظیم شد', 'success');
-  render();
-}
-
-async function handleGalleryFiles(files) {
-  const allowed = Math.max(0, 10 - state.productDraft.gallery.length);
-  const list = [...files].slice(0, allowed);
-  for (const f of list) {
-    const dataUrl = await readImageFile(f);
-    state.productDraft.gallery.push(dataUrl);
-  }
-  if (list.length) toast(`${list.length} تصویر به گالری اضافه شد`, 'success');
-  render();
-}
-
-function removeGalleryItem(i) {
-  state.productDraft.gallery.splice(i, 1);
-  render();
-}
-
-function moveGalleryItem(i, dir) {
-  const g = state.productDraft.gallery;
-  const ni = i + dir;
-  if (ni < 0 || ni >= g.length) return;
-  const [item] = g.splice(i, 1);
-  g.splice(ni, 0, item);
-  render();
-}
-
-function onMainImageChange(e) {
-  const file = e.target.files?.[0];
-  if (file) handleMainImageFiles([file]);
-}
-
-function clearProductDraft() {
-  state.productDraft = {
-    title: '',
-    category: '',
-    price: 0,
-    stock: 0,
-    description: '',
-    mainImage: '',
-    gallery: [],
-    original_price: 0,
-    _synced: null
-  };
-  state.editProduct = null;
-  render();
-}
-
-function validateProductForm(formEl) {
-  const title = (formEl.title.value || '').trim();
-  const price = Number(formEl.price.value || 0);
-  const stock = Number(formEl.stock.value || 0);
-
-  const errors = [];
-  if (!title) errors.push('نام محصول الزامی است.');
-  if (price < 0) errors.push('قیمت نمی‌تواند منفی باشد.');
-  if (stock < 0) errors.push('موجودی نمی‌تواند منفی باشد.');
-
-  return { ok: errors.length === 0, errors };
-}
-
-function submitProductForm(formEl) {
-  event.preventDefault();
-  initProductDraft();
-  const { ok, errors } = validateProductForm(formEl);
-  if (!ok) {
-    toast(errors[0], 'warning');
-    return;
-  }
-
-  const price = Number(formEl.price.value || 0);
-  const original_price = Number(formEl.original_price.value || 0);
-
-  const payload = {
-    title: formEl.title.value.trim(),
-    category: formEl.category.value || '',
-    price,
-    stock: Number(formEl.stock.value || 0),
-    description: formEl.description.value || '',
-    main_image: state.productDraft.mainImage,
-    image: state.productDraft.mainImage,
-    images: state.productDraft.gallery.filter(Boolean),
-    original_price: original_price > 0 ? original_price : 0
-  };
-
-  if (state.editProduct && state.editProduct.id) {
-    const updated = updateProduct(state.editProduct.id, payload);
-    if (updated) toast('تغییرات محصول ذخیره شد ✨', 'success');
-    clearProductDraft();
-  } else {
-    const created = createProduct(payload);
-    if (created) toast('محصول ذخیره شد ✅', 'success');
-    clearProductDraft();
-  }
-}
-
-/* PRODUCT MODAL */
-
-function renderProductModal() {
-  const isEdit = state.editProduct && state.editProduct.id;
-  const product = state.editProduct || {};
-
-  initProductDraft();
-  if (state.editProduct) syncDraftFromEditing();
-
-  const d = state.productDraft;
-  const price = d.price || product.price || 0;
-  const original = d.original_price || product.original_price || 0;
-  const hasDiscount = original > price && price > 0;
-  const discountPercent = hasDiscount ? Math.round(((original - price) / original) * 100) : 0;
-
-  return `
-    <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay">
-      <div class="glass-strong rounded-3xl p-6 lg:p-8 max-w-lg w-full max-h-[90%] overflow-y-auto animate-scale">
-        <h2 class="text-xl font-black mb-6">
-          ${isEdit ? '✏️ ویرایش محصول' : '➕ محصول جدید'}
-        </h2>
-        
-        <form onsubmit="
-          event.preventDefault();
-          submitProductForm(this);
-        ">
-          
-          <div class="space-y-5">
-            <div>
-              <label for="product-title" class="block text-sm text-white/70 mb-2">عنوان محصول *</label>
-              <input 
-                type="text" 
-                id="product-title" 
-                name="title" 
-                required 
-                value="${product.title || d.title || ''}"
-                class="w-full input-style"
-                placeholder="نام محصول را وارد کنید"
-              >
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label for="product-price" class="block text-sm text-white/70 mb-2">قیمت (تومان) *</label>
-                <input 
-                  type="number" 
-                  id="product-price" 
-                  name="price" 
-                  required 
-                  value="${price || ''}"
-                  class="w-full input-style"
-                  dir="ltr"
-                  placeholder="0"
-                >
-              </div>
-              <div>
-                <label for="product-original-price" class="block text-sm text-white/70 mb-2">قیمت اصلی (برای تخفیف)</label>
-                <input 
-                  type="number" 
-                  id="product-original-price" 
-                  name="original_price" 
-                  value="${original || ''}"
-                  class="w-full input-style"
-                  dir="ltr"
-                  placeholder="مثال: قیمت قبل از تخفیف"
-                >
-                ${
-                  hasDiscount
-                    ? `<p class="text-xs text-emerald-400 mt-1">${discountPercent}% تخفیف روی این محصول اعمال شده است</p>`
-                    : `<p class="text-xs text-white/40 mt-1">در صورت وارد کردن قیمت اصلی بالاتر از قیمت فعلی، تخفیف محاسبه می‌شود.</p>`
-                }
-              </div>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label for="product-stock" class="block text-sm text-white/70 mb-2">موجودی *</label>
-                <input 
-                  type="number" 
-                  id="product-stock" 
-                  name="stock" 
-                  required 
-                  value="${product.stock || d.stock || ''}"
-                  class="w-full input-style"
-                  dir="ltr"
-                  placeholder="0"
-                >
-              </div>
-              <div>
-                <label for="product-category" class="block text-sm text-white/70 mb-2">دسته‌بندی</label>
-                <select 
-                  id="product-category" 
-                  name="category" 
-                  class="w-full input-style"
-                >
-                  <option value="">بدون دسته</option>
-                  ${(state.categories || [])
-                    .map(
-                      cat => `
-                    <option value="${cat.id}" ${(product.category || d.category) === cat.id ? 'selected' : ''}>
-                      ${cat.icon || ''} ${cat.title}
-                    </option>
-                  `
-                    )
-                    .join('')}
-                </select>
-              </div>
-            </div>
-
-            <!-- تصویر اصلی -->
-            <div>
-              <label class="block text-sm text-white/70 mb-2">تصویر اصلی محصول</label>
-              <div 
-                id="main-dropzone"
-                class="glass rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer border border-dashed border-white/20 hover:border-violet-400 transition"
-                onclick="document.getElementById('main-image-input')?.click()"
-              >
-                ${
-                  d.mainImage
-                    ? `
-                      <div class="w-full max-h-56 rounded-xl overflow-hidden mb-3">
-                        <img src="${d.mainImage}" class="w-full h-full object-cover" alt="تصویر اصلی">
-                      </div>
-                      <div class="flex gap-2">
-                        <button 
-                          type="button" 
-                          class="btn-ghost px-4 py-2 rounded-xl text-sm"
-                          onclick="event.stopPropagation(); state.productDraft.mainImage=''; render();"
-                        >
-                          حذف تصویر
-                        </button>
-                        <button 
-                          type="button" 
-                          class="btn-primary px-4 py-2 rounded-xl text-sm"
-                          onclick="event.stopPropagation(); document.getElementById('main-image-input')?.click()"
-                        >
-                          تغییر تصویر
-                        </button>
-                      </div>
-                    `
-                    : `
-                      <div class="text-4xl">📷</div>
-                      <p class="text-sm text-white/70 text-center">برای انتخاب تصویر اصلی کلیک کنید یا فایل را اینجا رها کنید</p>
-                    `
-                }
-                <input 
-                  id="main-image-input"
-                  type="file" 
-                  accept="image/*" 
-                  class="hidden"
-                  onchange="onMainImageChange(event)"
-                >
-              </div>
-            </div>
-
-            <!-- گالری تصاویر -->
-            <div>
-              <label class="block text-sm text-white/70 mb-2">گالری تصاویر</label>
-              
-              <div class="flex gap-3 overflow-x-auto pb-2">
-                ${
-                  (d.gallery || []).length === 0
-                    ? `<p class="text-white/40 text-sm">هنوز تصویری در گالری ثبت نشده است.</p>`
-                    : d.gallery
-                        .map(
-                          (img, i) => `
-                        <div class="glass rounded-xl p-2 flex-shrink-0 w-32">
-                          <div class="w-full h-24 rounded-lg overflow-hidden mb-2">
-                            <img src="${img}" class="w-full h-full object-cover" alt="گالری">
-                          </div>
-                          <div class="flex items-center justify-between gap-1">
-                            <button 
-                              type="button" 
-                              class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                              onclick="removeGalleryItem(${i})"
-                            >
-                              حذف
-                            </button>
-                            <div class="flex gap-1">
-                              <button 
-                                type="button" 
-                                class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                                onclick="moveGalleryItem(${i}, -1)"
-                              >
-                                ◀
-                              </button>
-                              <button 
-                                type="button" 
-                                class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                                onclick="moveGalleryItem(${i}, 1)"
-                              >
-                                ▶
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      `
-                        )
-                        .join('')
-                }
-              </div>
-
-              <div 
-                id="gallery-dropzone"
-                class="glass rounded-2xl p-4 mt-3 flex flex-col items-center justify-center gap-3 cursor-pointer border border-dashed border-white/20 hover:border-violet-400 transition"
-                onclick="document.getElementById('gallery-image-input')?.click()"
-              >
-                <div class="text-3xl">🖼️</div>
-                <p class="text-sm text-white/70 text-center">برای افزودن تصاویر به گالری کلیک کنید یا فایل‌ها را اینجا رها کنید (حداکثر ۱۰ تصویر)</p>
-                <input 
-                  id="gallery-image-input"
-                  type="file" 
-                  accept="image/*" 
-                  multiple
-                  class="hidden"
-                  onchange="handleGalleryFiles(this.files)"
-                >
-              </div>
-            </div>
-            
-            <div>
-              <label for="product-description" class="block text-sm text-white/70 mb-2">توضیحات</label>
-              <textarea 
-                id="product-description" 
-                name="description" 
-                rows="3" 
-                class="w-full input-style resize-none"
-                placeholder="توضیحات محصول..."
-              >${product.description || d.description || ''}</textarea>
-            </div>
-          </div>
-          
-          <div class="flex gap-4 mt-8">
-            ${
-              isEdit
-                ? `
-                  <button 
-                    type="button" 
-                    class="flex-1 btn-danger py-4 rounded-xl font-semibold"
-                    onclick="
-                      state.confirmModal = {
-                        type: 'delete-product',
-                        title: 'حذف محصول',
-                        message: 'آیا از حذف «${product.title}» مطمئن هستید؟',
-                        icon: '🗑️',
-                        confirmText: 'حذف',
-                        confirmClass: 'btn-danger',
-                        onConfirm: () => {
-                          deleteProduct('${product.id}');
-                          state.confirmModal = null;
-                          state.editProduct = null;
-                          render();
-                        }
-                      };
-                      render();
-                    "
-                  >
-                    حذف محصول
-                  </button>
-                `
-                : ''
-            }
-            <button 
-              type="button" 
-              onclick="clearProductDraft()"
-              class="flex-1 btn-ghost py-4 rounded-xl font-semibold"
-            >
-              انصراف
-            </button>
-            <button 
-              type="submit" 
-              class="flex-1 btn-primary py-4 rounded-xl font-semibold"
-              ${state.loading ? 'disabled' : ''}
-            >
-              ${state.loading ? '⏳' : isEdit ? 'بروزرسانی' : 'ذخیره'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-}
-
-/* ========== Reviews: per-product management (safe) ========== */
-
-function setReviewStatus(reviewId, status) {
-  const list = Array.isArray(state.reviews) ? state.reviews : [];
-  const r = list.find(x => x.id === reviewId);
-  if (!r) return;
-  r.status = status;
-  if (window.AppState) AppState.set({ reviews: list });
-  render();
-}
-
-function renderAdminReviews() {
-  const reviews = Array.isArray(state.reviews) ? state.reviews : [];
-  const products = Array.isArray(state.products) ? state.products : [];
-
-  // گروه‌بندی بر اساس محصول
-  const byProduct = {};
-  reviews.forEach(r => {
-    const pid = r.product_id || r.productId || 'unknown';
-    if (!byProduct[pid]) byProduct[pid] = [];
-    byProduct[pid].push(r);
-  });
-
-  // اگر محصول انتخاب نشده، اولین محصول دارای نظر را انتخاب کن
-  if (!state.adminReviewsSelectedProductId) {
-    const firstPid = Object.keys(byProduct)[0] || null;
-    state.adminReviewsSelectedProductId = firstPid;
-  }
-
-  const activePid = state.adminReviewsSelectedProductId;
-  const activeReviews = activePid ? byProduct[activePid] || [] : [];
-
-  return `
-    <div class="animate-fade">
-      <h1 class="text-2xl lg:text-3xl font-black mb-6">مدیریت نظرات 📝</h1>
-
-      <div class="grid lg:grid-cols-[260px,1fr] gap-4">
-        <!-- لیست محصولات با نظر -->
-        <div class="glass rounded-2xl p-3 max-h-[60vh] overflow-y-auto">
-          <h2 class="text-sm font-bold mb-3 flex items-center justify-between">
-            <span>محصولات</span>
-            <span class="text-xs text-white/50">${Object.keys(byProduct).length} مورد</span>
-          </h2>
-          ${
-            Object.keys(byProduct).length === 0
-              ? `<p class="text-xs text-white/60">هنوز نظری ثبت نشده است.</p>`
-              : Object.keys(byProduct)
-                  .map(pid => {
-                    const product = products.find(p => p.id === pid);
-                    const title = product?.title || `محصول #${pid.slice(-6)}`;
-                    const pendingCount = (byProduct[pid] || []).filter(r => r.status === 'pending').length;
-                    const isActive = pid === activePid;
-                    return `
-                    <button
-                      type="button"
-                      onclick="state.adminReviewsSelectedProductId='${pid}'; render()"
-                      class="w-full text-right px-3 py-2 rounded-xl mb-1 flex items-center justify-between text-xs ${
-                        isActive ? 'bg-violet-500/20 text-violet-200' : 'glass'
-                      }"
-                    >
-                      <span class="line-clamp-1">${title}</span>
-                      ${
-                        pendingCount > 0
-                          ? `<span class="bg-rose-500 text-[10px] px-1.5 py-0.5 rounded-full">${pendingCount}</span>`
-                          : ''
-                      }
-                    </button>
-                  `;
-                  })
-                  .join('')
-          }
-        </div>
-
-        <!-- لیست نظرات محصول انتخاب شده -->
-        <div class="glass rounded-2xl p-4 flex flex-col max-h-[70vh] overflow-y-auto">
-          ${
-            !activePid
-              ? `<p class="text-sm text-white/60">محصولی برای نمایش انتخاب نشده است.</p>`
-              : activeReviews.length === 0
-              ? `<p class="text-sm text-white/60">برای این محصول نظری ثبت نشده است.</p>`
-              : activeReviews
-                  .map(r => {
-                    const status = r.status || 'pending';
-                    const isPending = status === 'pending';
-                    const created = utils.formatDateTime(r.created_at || r.createdAt || '');
-                    const name = r.user_name || r.userName || 'کاربر';
-                    const rating = Number(r.rating || 0);
-
-                    return `
-                    <div class="glass rounded-xl p-3 mb-3 text-xs">
-                      <div class="flex items-center justify-between mb-1.5">
-                        <div class="font-semibold">${name}</div>
-                        <div class="flex items-center gap-1">
-                          ${
-                            rating > 0
-                              ? `<span class="text-amber-400">${'★'.repeat(rating)}</span>`
-                              : ''
-                          }
-                          <span class="text-white/40">${created}</span>
-                        </div>
-                      </div>
-                      <p class="text-white/80 mb-2 whitespace-pre-line">${r.text || r.comment || ''}</p>
-                      <div class="flex items-center justify-between">
-                        <span class="text-[10px] ${
-                          isPending
-                            ? 'text-amber-400'
-                            : status === 'approved'
-                            ? 'text-emerald-400'
-                            : 'text-rose-400'
-                        }">
-                          ${
-                            isPending
-                              ? 'در انتظار بررسی'
-                              : status === 'approved'
-                              ? 'تایید شده'
-                              : 'رد شده'
-                          }
-                        </span>
-                        <div class="flex gap-1">
-                          <button
-                            type="button"
-                            class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                            onclick="setReviewStatus('${r.id}', 'approved')"
-                          >
-                            تایید
-                          </button>
-                          <button
-                            type="button"
-                            class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                            onclick="setReviewStatus('${r.id}', 'rejected')"
-                          >
-                            رد
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  `;
-                  })
-                  .join('')
-          }
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-/* ========== Support: messenger-style, responsive, urgent + quick replies ========== */
+/* ========== Support: messenger-style + quick replies ========== */
 
 function getTicketMessages(t) {
   if (!t) return [];
@@ -1312,7 +699,7 @@ function addQuickReply(label, text) {
 }
 
 function deleteQuickReply(id) {
-  state.supportQuickReplies = (state.supportQuickReplies || []).filter(q => q.id !== id);
+  state.supportQuickReplies = state.supportQuickReplies.filter(q => q.id !== id);
   if (window.AppState) AppState.set({ supportQuickReplies: state.supportQuickReplies });
   toast('پاسخ آماده حذف شد', 'success');
   render();
@@ -1368,12 +755,9 @@ function renderAdminSupportQuickReplies() {
   `;
 }
 
-/* Main support renderer (with scrollable ticket list + chat, mobile-friendly) */
-
 function renderAdminSupportSafe() {
   const allTickets = Array.isArray(state.tickets) ? state.tickets : [];
 
-  // Filters
   let filtered = allTickets;
   if (state.supportFilter.status) {
     filtered = filtered.filter(t => t.status === state.supportFilter.status);
@@ -1385,7 +769,6 @@ function renderAdminSupportSafe() {
     filtered = filtered.filter(t => (t.priority || 'normal') === 'urgent');
   }
 
-  // Sort: urgent first, then newest
   filtered = [...filtered].sort((a, b) => {
     const pa = a.priority === 'urgent' ? 1 : 0;
     const pb = b.priority === 'urgent' ? 1 : 0;
@@ -1393,7 +776,6 @@ function renderAdminSupportSafe() {
     return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
 
-  // Selected ticket
   if (!state.adminSupportSelectedTicketId && filtered.length > 0) {
     state.adminSupportSelectedTicketId = filtered[0].id;
   }
@@ -1416,7 +798,6 @@ function renderAdminSupportSafe() {
     <div class="animate-fade">
       <h1 class="text-2xl lg:text-3xl font-black mb-4">پشتیبانی و تیکت‌ها 💬</h1>
 
-      <!-- Filters -->
       <div class="glass rounded-2xl p-4 mb-4 flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
         <div class="flex flex-wrap gap-2">
           <span class="text-xs text-white/60">وضعیت:</span>
@@ -1489,11 +870,9 @@ function renderAdminSupportSafe() {
         state.supportFilter.view === 'quick'
           ? renderAdminSupportQuickReplies()
           : `
-        <!-- Messenger layout -->
-        <div class="glass rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row gap-3 min-h-[420px] lg:min-h-[480px] max-h-[80vh]">
+        <div class="glass rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row gap-3 min-h-[420px] lg:min-h-[480px]">
 
-          <!-- Ticket list (scrollable, mobile-safe) -->
-          <div class="w-full lg:w-80 lg:max-w-xs flex-shrink-0 flex flex-col gap-2 max-h-[220px] lg:max-h-[70vh] overflow-y-auto pr-1">
+          <div class="w-full lg:w-80 lg:max-w-xs flex-shrink-0 flex flex-col gap-2 max-h-[260px] lg:max-h-[70vh] overflow-y-auto pr-1">
             ${
               filtered.length === 0
                 ? `<div class="text-sm text-white/60 px-2 py-3">تیکتی یافت نشد.</div>`
@@ -1510,26 +889,34 @@ function renderAdminSupportSafe() {
                       return `
                         <button
                           type="button"
-                          onclick="state.adminSupportSelectedTicketId='${t.id}'; render()"
-                          class="glass rounded-xl px-3 py-2 text-right text-xs flex items-center gap-2 ${
-                            isActive ? 'border border-violet-500/60 bg-violet-500/10' : ''
+                          class="glass rounded-xl px-3 py-2 text-right text-xs flex flex-col gap-1 ${
+                            isActive ? 'border border-violet-400/60 bg-violet-500/10' : ''
                           }"
+                          onclick="state.adminSupportSelectedTicketId='${t.id}'; render()"
                         >
-                          <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm flex-shrink-0">
-                            ${initial}
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                              <div class="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[11px]">
+                                ${initial}
+                              </div>
+                              <div class="flex flex-col">
+                                <span class="font-semibold text-[11px]">${name}</span>
+                                <span class="text-[10px] text-white/50">${phone}</span>
+                              </div>
+                            </div>
+                            <span class="text-[10px] text-white/40">
+                              ${utils.formatTime(t.created_at || t.createdAt || '')}
+                            </span>
                           </div>
-                          <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between gap-1 mb-0.5">
-                              <span class="font-semibold line-clamp-1">${name}</span>
-                              ${
-                                priority === 'urgent'
-                                  ? `<span class="text-[10px] text-rose-400">فوری</span>`
-                                  : ''
-                              }
-                            </div>
-                            <div class="text-[10px] text-white/60 line-clamp-1">
-                              ${lastMsg ? lastMsg.text : phone}
-                            </div>
+                          <div class="flex items-center justify-between gap-2 mt-1">
+                            <span class="line-clamp-1 text-[11px] text-white/70">
+                              ${(lastMsg && lastMsg.text) || t.subject || 'بدون متن'}
+                            </span>
+                            <span class="text-[10px] ${
+                              priority === 'urgent' ? 'text-rose-400' : 'text-emerald-400'
+                            }">
+                              ${priority === 'urgent' ? 'فوری' : 'عادی'}
+                            </span>
                           </div>
                         </button>
                       `;
@@ -1538,52 +925,52 @@ function renderAdminSupportSafe() {
             }
           </div>
 
-          <!-- Chat area (scrollable bottom section on mobile) -->
-          <div class="flex-1 flex flex-col gap-2 max-h-[70vh]">
+          <div class="flex-1 glass rounded-xl p-3 lg:p-4 flex flex-col min-h-[260px] max-h-[70vh]">
             ${
               !activeTicket
                 ? `<div class="flex-1 flex items-center justify-center text-sm text-white/60">تیکتی انتخاب نشده است.</div>`
                 : `
-              <div class="glass rounded-xl p-3 flex items-center justify-between text-xs">
+              <div class="flex items-center justify-between mb-3 gap-2">
                 <div>
-                  <div class="font-semibold">${activeTicket.user_name || 'کاربر'}</div>
-                  <div class="text-white/60">${activeTicket.user_phone || '-'}</div>
+                  <div class="font-semibold text-sm">${activeTicket.user_name || 'کاربر'}</div>
+                  <div class="text-[11px] text-white/60">${activeTicket.user_phone || '-'}</div>
                 </div>
-                <div class="flex gap-1">
-                  <button
-                    type="button"
-                    class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                    onclick="updateTicketStatus(state.tickets.find(t=>t.id==='${activeTicket.id}'),'open')"
+                <div class="flex items-center gap-2 text-[11px]">
+                  <span class="px-2 py-1 rounded-full ${
+                    (activeTicket.priority || 'normal') === 'urgent'
+                      ? 'bg-rose-500/15 text-rose-300'
+                      : 'bg-emerald-500/15 text-emerald-300'
+                  }">
+                    ${(activeTicket.priority || 'normal') === 'urgent' ? 'فوری' : 'عادی'}
+                  </span>
+                  <select
+                    class="bg-white/10 border border-white/20 rounded-xl px-2 py-1 text-[11px]"
+                    onchange="updateTicketStatus(activeTicket, this.value)"
                   >
-                    باز
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
-                    onclick="closeTicket(state.tickets.find(t=>t.id==='${activeTicket.id}'))"
-                  >
-                    بستن
-                  </button>
+                    <option value="open" ${activeTicket.status === 'open' ? 'selected' : ''}>باز</option>
+                    <option value="closed" ${activeTicket.status === 'closed' ? 'selected' : ''}>بسته</option>
+                  </select>
                 </div>
               </div>
 
-              <!-- messages (scrollable) -->
-              <div class="flex-1 glass rounded-xl p-3 overflow-y-auto">
+              <div class="flex-1 overflow-y-auto space-y-2 mb-3 pr-1">
                 ${
                   activeMessages.length === 0
-                    ? `<p class="text-xs text-white/60">پیامی ثبت نشده است.</p>`
+                    ? `<div class="text-xs text-white/60">پیامی ثبت نشده است.</div>`
                     : activeMessages
                         .map(m => {
                           const isAdmin = m.from === 'admin';
                           return `
-                            <div class="mb-2 flex ${isAdmin ? 'justify-start' : 'justify-end'}">
+                            <div class="flex ${isAdmin ? 'justify-start' : 'justify-end'}">
                               <div class="max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
-                                isAdmin ? 'bg-violet-500/30' : 'bg-white/10'
+                                isAdmin
+                                  ? 'bg-white/10 text-white'
+                                  : 'bg-violet-500/80 text-white'
                               }">
-                                <div class="mb-0.5 text-[10px] text-white/60">
-                                  ${utils.formatDateTime(m.at || '')}
+                                <div class="whitespace-pre-wrap">${m.text}</div>
+                                <div class="text-[9px] text-white/60 mt-1 text-left">
+                                  ${utils.formatTime(m.at || '')}
                                 </div>
-                                <div class="whitespace-pre-line">${m.text}</div>
                               </div>
                             </div>
                           `;
@@ -1592,33 +979,150 @@ function renderAdminSupportSafe() {
                 }
               </div>
 
-              <!-- input (bottom, stays visible, mobile scroll-safe) -->
               <form
-                class="mt-2 flex items-center gap-2"
+                class="flex items-end gap-2 mt-auto"
                 onsubmit="
                   event.preventDefault();
-                  const t = (state.tickets || []).find(x => x.id === '${activeTicket.id}');
                   const text = this.message.value;
-                  addTicketMessage(t, { from: 'admin', text });
-                  this.message.value='';
+                  addTicketMessage(activeTicket, { text, from: 'admin' }).then(() => { this.reset(); });
                 "
               >
                 <textarea
                   name="message"
                   rows="1"
-                  class="flex-1 input-style resize-none text-xs max-h-24"
+                  class="flex-1 input-style text-xs resize-none"
                   placeholder="نوشتن پاسخ..."
                 ></textarea>
                 <button
                   type="submit"
-                  class="btn-primary px-3 py-2 rounded-xl text-xs flex items-center gap-1"
+                  class="btn-primary px-3 py-2 rounded-xl text-xs font-semibold"
                 >
-                  <span>ارسال</span>
+                  ارسال
                 </button>
               </form>
             `
             }
           </div>
+        </div>
+      `
+      }
+    </div>
+  `;
+}
+
+/* ========== Reviews: safe renderer ========== */
+
+function renderAdminReviews() {
+  const reviews = Array.isArray(state.reviews) ? state.reviews : [];
+  const products = Array.isArray(state.products) ? state.products : [];
+
+  if (!state.adminReviewsSelectedProductId && reviews.length > 0) {
+    const first = reviews[0];
+    state.adminReviewsSelectedProductId = first.product_id || first.productId || null;
+  }
+
+  const selectedProductId = state.adminReviewsSelectedProductId;
+  const productOptions = products.map(p => ({
+    id: p.id,
+    title: p.title || 'بدون نام'
+  }));
+
+  const filteredReviews = selectedProductId
+    ? reviews.filter(r => (r.product_id || r.productId) === selectedProductId)
+    : reviews;
+
+  const selectedProduct = products.find(p => p.id === selectedProductId) || null;
+
+  return `
+    <div class="animate-fade">
+      <div class="flex items-center justify-between mb-6 gap-3">
+        <div>
+          <h1 class="text-2xl lg:text-3xl font-black">نظرات کاربران</h1>
+          <p class="text-xs text-white/60 mt-1">
+            ${reviews.length} نظر ثبت شده
+            ${
+              selectedProduct
+                ? ` | محصول انتخاب شده: <span class="font-semibold">${selectedProduct.title}</span>`
+                : ''
+            }
+          </p>
+        </div>
+        <div class="min-w-[180px]">
+          <select
+            class="input-style text-xs"
+            onchange="state.adminReviewsSelectedProductId=this.value || null; render();"
+          >
+            <option value="">همه محصولات</option>
+            ${productOptions
+              .map(
+                p => `
+              <option value="${p.id}" ${selectedProductId === p.id ? 'selected' : ''}>
+                ${p.title}
+              </option>
+            `
+              )
+              .join('')}
+          </select>
+        </div>
+      </div>
+
+      ${
+        filteredReviews.length === 0
+          ? `
+        <div class="glass rounded-3xl p-12 text-center">
+          <div class="text-5xl mb-4">📝</div>
+          <h3 class="text-lg font-bold mb-2">نظری یافت نشد</h3>
+          <p class="text-sm text-white/60">برای این فیلتر، نظری ثبت نشده است.</p>
+        </div>
+      `
+          : `
+        <div class="space-y-3">
+          ${filteredReviews
+            .map(r => {
+              const status = r.status || 'pending';
+              const name = r.user_name || r.name || 'کاربر';
+              const rating = Number(r.rating || 0);
+              const created = r.created_at || r.createdAt || '';
+
+              return `
+                <div class="glass rounded-2xl p-4 flex flex-col gap-2">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs">
+                        ${name.trim()[0] || 'ک'}
+                      </div>
+                      <div>
+                        <div class="text-sm font-semibold">${name}</div>
+                        <div class="text-[11px] text-white/50">${utils.formatDateTime(created)}</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <div class="text-amber-400 text-xs">
+                        ${'★'.repeat(rating)}${'☆'.repeat(Math.max(0, 5 - rating))}
+                      </div>
+                      <select
+                        class="bg-white/10 border border-white/20 rounded-xl px-2 py-1 text-[11px]"
+                        onchange="
+                          const next = this.value;
+                          const id = '${r.id}';
+                          const idx = state.reviews.findIndex(x => x.id === id);
+                          if(idx !== -1){ state.reviews[idx].status = next; }
+                          render();
+                        "
+                      >
+                        <option value="pending" ${status === 'pending' ? 'selected' : ''}>در انتظار</option>
+                        <option value="approved" ${status === 'approved' ? 'selected' : ''}>تایید شده</option>
+                        <option value="rejected" ${status === 'rejected' ? 'selected' : ''}>رد شده</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="text-sm text-white/80 whitespace-pre-wrap">
+                    ${r.comment || r.text || ''}
+                  </div>
+                </div>
+              `;
+            })
+            .join('')}
         </div>
       `
       }

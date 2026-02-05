@@ -1,6 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
-// ADMIN PANEL (GPT‑5 FINAL, WITH PER‑PRODUCT REVIEWS MANAGEMENT
-// + NEW SUPPORT MESSENGER, URGENT TICKETS & QUICK REPLIES)
+// ADMIN PANEL (GPT‑5 FINAL)
+// - Per‑product reviews management (safe, no render errors)
+// - New support messenger (scrollable on mobile)
+// - Categories modal CRUD
+// - Products pro editor (from admin product.txt)
+// - Orders safe renderer
 // File: assets/js/admin panel.js
 // ═══════════════════════════════════════════════════════════════
 
@@ -8,7 +12,6 @@
 
 state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
 state.adminReviewsSelectedProductId = state.adminReviewsSelectedProductId || null;
-state.adminReviewsListOpen = typeof state.adminReviewsListOpen === 'boolean' ? state.adminReviewsListOpen : true;
 
 // Support filters + selection + quick replies
 state.supportFilter = state.supportFilter || { status: '', priority: '', view: 'all' };
@@ -24,6 +27,7 @@ state.orderFilter = state.orderFilter || { status: '' };
 state.adminTab = state.adminTab || 'dashboard';
 
 state.categoryModal = state.categoryModal || null;
+state.tickets = Array.isArray(state.tickets) ? state.tickets : [];
 
 /* ========== Root admin panel renderer ========== */
 
@@ -145,6 +149,34 @@ function renderAdminPanel() {
   `;
 }
 
+/* ========== Minimal dashboard (to avoid render errors) ========== */
+
+function renderAdminDashboard() {
+  const productsCount = (state.products || []).length;
+  const ordersCount = (state.orders || []).length;
+  const reviewsCount = (state.reviews || []).length;
+
+  return `
+    <div class="animate-fade">
+      <h1 class="text-2xl lg:text-3xl font-black mb-6">داشبورد</h1>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass rounded-2xl p-4">
+          <p class="text-xs text-white/60 mb-1">محصولات</p>
+          <p class="text-2xl font-black">${productsCount}</p>
+        </div>
+        <div class="glass rounded-2xl p-4">
+          <p class="text-xs text-white/60 mb-1">سفارشات</p>
+          <p class="text-2xl font-black">${ordersCount}</p>
+        </div>
+        <div class="glass rounded-2xl p-4">
+          <p class="text-xs text-white/60 mb-1">نظرات</p>
+          <p class="text-2xl font-black">${reviewsCount}</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 /* ========== Helper wrapper to align legacy select to new API ========== */
 
 function updateOrderStatus(order, nextStatus) {
@@ -193,6 +225,8 @@ function saveCategoryModal() {
     return;
   }
 
+  state.categories = Array.isArray(state.categories) ? state.categories : [];
+
   if (m.mode === 'add') {
     const id = utils.generateId();
     state.categories.push({ id, title });
@@ -205,7 +239,7 @@ function saveCategoryModal() {
 
     toast('دسته‌بندی اضافه شد', 'success');
   } else {
-    const cat = (state.categories || []).find(c => c.id === m.id);
+    const cat = state.categories.find(c => c.id === m.id);
     if (!cat) return;
 
     cat.title = title;
@@ -255,7 +289,8 @@ function renderCategoryModal() {
   const m = state.categoryModal;
   if (!m) return '';
 
-  const uncategorized = (state.products || []).filter(p => !p.category || p.category === m.id);
+  const products = Array.isArray(state.products) ? state.products : [];
+  const uncategorized = products.filter(p => !p.category || p.category === m.id);
 
   return `
     <div class="fixed inset-0 z-[200] flex items-center justify-center p-4 modal-overlay">
@@ -360,17 +395,18 @@ function renderCategoryModal() {
 }
 
 function renderAdminCategoriesEditor() {
+  const categories = Array.isArray(state.categories) ? state.categories : [];
   return `
     <div class="animate-fade">
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl lg:text-3xl font-black">مدیریت دسته‌بندی‌ها (${(state.categories || []).length})</h1>
+        <h1 class="text-2xl lg:text-3xl font-black">مدیریت دسته‌بندی‌ها (${categories.length})</h1>
         <button class="btn-primary px-5 py-3 rounded-xl font-semibold text-sm" type="button" onclick="openCategoryModal('add')">
           افزودن دسته
         </button>
       </div>
 
       <div class="grid gap-3">
-        ${(state.categories || [])
+        ${categories
           .map(
             (c, i) => `
           <div class="glass rounded-xl p-4 flex items-center justify-between animate-fade" style="animation-delay:${i *
@@ -395,7 +431,8 @@ function renderAdminCategoriesEditor() {
 /* ========== Orders: safe render (handles items array or JSON string) ========== */
 
 function renderAdminOrdersSafe() {
-  let filteredOrders = Array.isArray(state.orders) ? [...state.orders] : [];
+  const orders = Array.isArray(state.orders) ? state.orders : [];
+  let filteredOrders = [...orders];
   if (state.orderFilter.status) {
     filteredOrders = filteredOrders.filter(o => o.status === state.orderFilter.status);
   }
@@ -504,231 +541,703 @@ function renderAdminOrdersSafe() {
   `;
 }
 
-/* ========== Reviews: per-product management + collapsible drawer ========== */
+/* ========== Products: list + pro editor (from admin product.txt) ========== */
 
-function getProductById(id) {
-  return (state.products || []).find(p => p.id === id) || null;
+// فقط این نسخه از رندر لیست محصولات استفاده می‌شود
+function renderAdminProductsEditor() {
+  initProductDraft();
+  if (state.editProduct) syncDraftFromEditing();
+
+  const products = Array.isArray(state.products) ? state.products : [];
+
+  return `
+    <div class="animate-fade">
+      <div class="flex items-center justify-between mb-8">
+        <h1 class="text-2xl lg:text-3xl font-black">محصولات (${products.length})</h1>
+        <button 
+          onclick="state.editProduct = {}; state.productDraft={title:'',category:'',price:0,stock:0,description:'',mainImage:'',gallery:[],original_price:0,_synced:null}; render()"
+          class="btn-primary px-5 py-3 rounded-xl flex items-center gap-2 text-sm font-semibold"
+        >
+          <span>+</span>
+          <span>افزودن محصول</span>
+        </button>
+      </div>
+      
+      ${
+        products.length > 0
+          ? `
+        <div class="grid gap-4">
+          ${products
+            .map((product, i) => {
+              const imgSrc = product.image || product.main_image || '';
+              const hasImage = !!imgSrc;
+              const price = Number(product.price || 0);
+              const original = Number(product.original_price || 0);
+              const hasDiscount = original > price && price > 0;
+              const discountPercent = hasDiscount
+                ? Math.round(((original - price) / original) * 100)
+                : 0;
+
+              return `
+              <div class="glass rounded-2xl p-5 flex items-center gap-4 animate-fade" style="animation-delay: ${i *
+                0.05}s">
+                <div class="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0">
+                  ${
+                    hasImage
+                      ? `<img src="${imgSrc}" alt="${product.title}" class="w-full h-full object-cover">`
+                      : `<span class="text-3xl">📦</span>`
+                  }
+                </div>
+                
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-bold truncate">${product.title}</h3>
+                  <p class="text-white/60 text-sm">
+                    ${(state.categories || []).find(c => c.id === product.category)?.title || 'بدون دسته'}
+                  </p>
+                </div>
+                
+                <div class="text-left hidden sm:block">
+                  ${
+                    hasDiscount
+                      ? `
+                        <div class="flex items-center gap-2">
+                          <span class="text-emerald-400 font-bold">${utils.formatPrice(price)}</span>
+                          <span class="price-original text-xs">${utils.formatPrice(original)}</span>
+                        </div>
+                        <div class="mt-1">
+                          <span class="badge badge-discount text-[10px]">${discountPercent}% تخفیف</span>
+                        </div>
+                      `
+                      : `<p class="text-emerald-400 font-bold">${utils.formatPrice(price)}</p>`
+                  }
+                  <p class="text-xs text-white/60 mt-1">موجودی: ${product.stock || 0}</p>
+                </div>
+                
+                <div class="flex gap-2">
+                  <button 
+                    onclick="state.editProduct = (state.products || []).find(p => p.id === '${product.id}'); render()"
+                    class="p-3 glass rounded-xl hover:bg-white/10 transition-all"
+                    aria-label="ویرایش"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    onclick="
+                      state.editProduct = null;
+                      state.confirmModal = { 
+                        type: 'delete-product', 
+                        title: 'حذف محصول', 
+                        message: 'آیا از حذف «${product.title}» مطمئن هستید؟', 
+                        icon: '🗑️', 
+                        confirmText: 'حذف', 
+                        confirmClass: 'btn-danger', 
+                        onConfirm: () => { 
+                          deleteProduct('${product.id}');
+                          state.confirmModal = null;
+                          render();
+                        } 
+                      }; 
+                      render();
+                    "
+                    class="p-3 glass rounded-xl hover:bg-rose-500/20 text-rose-400 transition-all"
+                    aria-label="حذف"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            `;
+            })
+            .join('')}
+        </div>
+      `
+          : `
+        <div class="glass rounded-3xl p-16 text-center">
+          <div class="text-7xl mb-6 animate-float">📦</div>
+          <h3 class="text-2xl font-bold mb-4">محصولی ثبت نشده است</h3>
+          <p class="text-white/60 mb-6">اولین محصول خود را اضافه کنید</p>
+          <button 
+            onclick="state.editProduct = {}; state.productDraft={title:'',category:'',price:0,stock:0,description:'',mainImage:'',gallery:[],original_price:0,_synced:null}; render()"
+            class="btn-primary px-8 py-4 rounded-xl font-bold"
+          >
+            افزودن محصول
+          </button>
+        </div>
+      `
+      }
+
+      ${state.editProduct ? renderProductModal() : ''}
+    </div>
+  `;
 }
 
-function getProductReviews(productId) {
-  return (state.reviews || []).filter(r => r.product_id === productId || r.productId === productId);
+/* ========== Products: pro editor helpers ========== */
+
+function initProductDraft() {
+  if (!state.productDraft) {
+    state.productDraft = {
+      title: '',
+      category: '',
+      price: 0,
+      stock: 0,
+      description: '',
+      mainImage: '',
+      gallery: [],
+      original_price: 0,
+      _synced: null
+    };
+  }
 }
+
+function syncDraftFromEditing() {
+  const p = state.editProduct;
+  if (!p) return;
+  const d = state.productDraft;
+  if (d._synced === p.id) return;
+  d.title = p.title || '';
+  d.category = p.category || '';
+  d.price = Number(p.price || 0);
+  d.stock = Number(p.stock || 0);
+  d.description = p.description || '';
+  d.mainImage = p.main_image || p.image || '';
+  d.gallery = Array.isArray(p.images) ? [...p.images] : [];
+  d.original_price = Number(p.original_price || 0);
+  d._synced = p.id;
+}
+
+function readImageFile(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleMainImageFiles(files) {
+  const file = files[0];
+  if (!file) return;
+  const dataUrl = await readImageFile(file);
+  state.productDraft.mainImage = dataUrl;
+  toast('تصویر اصلی تنظیم شد', 'success');
+  render();
+}
+
+async function handleGalleryFiles(files) {
+  const allowed = Math.max(0, 10 - state.productDraft.gallery.length);
+  const list = [...files].slice(0, allowed);
+  for (const f of list) {
+    const dataUrl = await readImageFile(f);
+    state.productDraft.gallery.push(dataUrl);
+  }
+  if (list.length) toast(`${list.length} تصویر به گالری اضافه شد`, 'success');
+  render();
+}
+
+function removeGalleryItem(i) {
+  state.productDraft.gallery.splice(i, 1);
+  render();
+}
+
+function moveGalleryItem(i, dir) {
+  const g = state.productDraft.gallery;
+  const ni = i + dir;
+  if (ni < 0 || ni >= g.length) return;
+  const [item] = g.splice(i, 1);
+  g.splice(ni, 0, item);
+  render();
+}
+
+function onMainImageChange(e) {
+  const file = e.target.files?.[0];
+  if (file) handleMainImageFiles([file]);
+}
+
+function clearProductDraft() {
+  state.productDraft = {
+    title: '',
+    category: '',
+    price: 0,
+    stock: 0,
+    description: '',
+    mainImage: '',
+    gallery: [],
+    original_price: 0,
+    _synced: null
+  };
+  state.editProduct = null;
+  render();
+}
+
+function validateProductForm(formEl) {
+  const title = (formEl.title.value || '').trim();
+  const price = Number(formEl.price.value || 0);
+  const stock = Number(formEl.stock.value || 0);
+
+  const errors = [];
+  if (!title) errors.push('نام محصول الزامی است.');
+  if (price < 0) errors.push('قیمت نمی‌تواند منفی باشد.');
+  if (stock < 0) errors.push('موجودی نمی‌تواند منفی باشد.');
+
+  return { ok: errors.length === 0, errors };
+}
+
+function submitProductForm(formEl) {
+  event.preventDefault();
+  initProductDraft();
+  const { ok, errors } = validateProductForm(formEl);
+  if (!ok) {
+    toast(errors[0], 'warning');
+    return;
+  }
+
+  const price = Number(formEl.price.value || 0);
+  const original_price = Number(formEl.original_price.value || 0);
+
+  const payload = {
+    title: formEl.title.value.trim(),
+    category: formEl.category.value || '',
+    price,
+    stock: Number(formEl.stock.value || 0),
+    description: formEl.description.value || '',
+    main_image: state.productDraft.mainImage,
+    image: state.productDraft.mainImage,
+    images: state.productDraft.gallery.filter(Boolean),
+    original_price: original_price > 0 ? original_price : 0
+  };
+
+  if (state.editProduct && state.editProduct.id) {
+    const updated = updateProduct(state.editProduct.id, payload);
+    if (updated) toast('تغییرات محصول ذخیره شد ✨', 'success');
+    clearProductDraft();
+  } else {
+    const created = createProduct(payload);
+    if (created) toast('محصول ذخیره شد ✅', 'success');
+    clearProductDraft();
+  }
+}
+
+/* PRODUCT MODAL */
+
+function renderProductModal() {
+  const isEdit = state.editProduct && state.editProduct.id;
+  const product = state.editProduct || {};
+
+  initProductDraft();
+  if (state.editProduct) syncDraftFromEditing();
+
+  const d = state.productDraft;
+  const price = d.price || product.price || 0;
+  const original = d.original_price || product.original_price || 0;
+  const hasDiscount = original > price && price > 0;
+  const discountPercent = hasDiscount ? Math.round(((original - price) / original) * 100) : 0;
+
+  return `
+    <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay">
+      <div class="glass-strong rounded-3xl p-6 lg:p-8 max-w-lg w-full max-h-[90%] overflow-y-auto animate-scale">
+        <h2 class="text-xl font-black mb-6">
+          ${isEdit ? '✏️ ویرایش محصول' : '➕ محصول جدید'}
+        </h2>
+        
+        <form onsubmit="
+          event.preventDefault();
+          submitProductForm(this);
+        ">
+          
+          <div class="space-y-5">
+            <div>
+              <label for="product-title" class="block text-sm text-white/70 mb-2">عنوان محصول *</label>
+              <input 
+                type="text" 
+                id="product-title" 
+                name="title" 
+                required 
+                value="${product.title || d.title || ''}"
+                class="w-full input-style"
+                placeholder="نام محصول را وارد کنید"
+              >
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="product-price" class="block text-sm text-white/70 mb-2">قیمت (تومان) *</label>
+                <input 
+                  type="number" 
+                  id="product-price" 
+                  name="price" 
+                  required 
+                  value="${price || ''}"
+                  class="w-full input-style"
+                  dir="ltr"
+                  placeholder="0"
+                >
+              </div>
+              <div>
+                <label for="product-original-price" class="block text-sm text-white/70 mb-2">قیمت اصلی (برای تخفیف)</label>
+                <input 
+                  type="number" 
+                  id="product-original-price" 
+                  name="original_price" 
+                  value="${original || ''}"
+                  class="w-full input-style"
+                  dir="ltr"
+                  placeholder="مثال: قیمت قبل از تخفیف"
+                >
+                ${
+                  hasDiscount
+                    ? `<p class="text-xs text-emerald-400 mt-1">${discountPercent}% تخفیف روی این محصول اعمال شده است</p>`
+                    : `<p class="text-xs text-white/40 mt-1">در صورت وارد کردن قیمت اصلی بالاتر از قیمت فعلی، تخفیف محاسبه می‌شود.</p>`
+                }
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="product-stock" class="block text-sm text-white/70 mb-2">موجودی *</label>
+                <input 
+                  type="number" 
+                  id="product-stock" 
+                  name="stock" 
+                  required 
+                  value="${product.stock || d.stock || ''}"
+                  class="w-full input-style"
+                  dir="ltr"
+                  placeholder="0"
+                >
+              </div>
+              <div>
+                <label for="product-category" class="block text-sm text-white/70 mb-2">دسته‌بندی</label>
+                <select 
+                  id="product-category" 
+                  name="category" 
+                  class="w-full input-style"
+                >
+                  <option value="">بدون دسته</option>
+                  ${(state.categories || [])
+                    .map(
+                      cat => `
+                    <option value="${cat.id}" ${(product.category || d.category) === cat.id ? 'selected' : ''}>
+                      ${cat.icon || ''} ${cat.title}
+                    </option>
+                  `
+                    )
+                    .join('')}
+                </select>
+              </div>
+            </div>
+
+            <!-- تصویر اصلی -->
+            <div>
+              <label class="block text-sm text-white/70 mb-2">تصویر اصلی محصول</label>
+              <div 
+                id="main-dropzone"
+                class="glass rounded-2xl p-4 flex flex-col items-center justify-center gap-3 cursor-pointer border border-dashed border-white/20 hover:border-violet-400 transition"
+                onclick="document.getElementById('main-image-input')?.click()"
+              >
+                ${
+                  d.mainImage
+                    ? `
+                      <div class="w-full max-h-56 rounded-xl overflow-hidden mb-3">
+                        <img src="${d.mainImage}" class="w-full h-full object-cover" alt="تصویر اصلی">
+                      </div>
+                      <div class="flex gap-2">
+                        <button 
+                          type="button" 
+                          class="btn-ghost px-4 py-2 rounded-xl text-sm"
+                          onclick="event.stopPropagation(); state.productDraft.mainImage=''; render();"
+                        >
+                          حذف تصویر
+                        </button>
+                        <button 
+                          type="button" 
+                          class="btn-primary px-4 py-2 rounded-xl text-sm"
+                          onclick="event.stopPropagation(); document.getElementById('main-image-input')?.click()"
+                        >
+                          تغییر تصویر
+                        </button>
+                      </div>
+                    `
+                    : `
+                      <div class="text-4xl">📷</div>
+                      <p class="text-sm text-white/70 text-center">برای انتخاب تصویر اصلی کلیک کنید یا فایل را اینجا رها کنید</p>
+                    `
+                }
+                <input 
+                  id="main-image-input"
+                  type="file" 
+                  accept="image/*" 
+                  class="hidden"
+                  onchange="onMainImageChange(event)"
+                >
+              </div>
+            </div>
+
+            <!-- گالری تصاویر -->
+            <div>
+              <label class="block text-sm text-white/70 mb-2">گالری تصاویر</label>
+              
+              <div class="flex gap-3 overflow-x-auto pb-2">
+                ${
+                  (d.gallery || []).length === 0
+                    ? `<p class="text-white/40 text-sm">هنوز تصویری در گالری ثبت نشده است.</p>`
+                    : d.gallery
+                        .map(
+                          (img, i) => `
+                        <div class="glass rounded-xl p-2 flex-shrink-0 w-32">
+                          <div class="w-full h-24 rounded-lg overflow-hidden mb-2">
+                            <img src="${img}" class="w-full h-full object-cover" alt="گالری">
+                          </div>
+                          <div class="flex items-center justify-between gap-1">
+                            <button 
+                              type="button" 
+                              class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                              onclick="removeGalleryItem(${i})"
+                            >
+                              حذف
+                            </button>
+                            <div class="flex gap-1">
+                              <button 
+                                type="button" 
+                                class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                                onclick="moveGalleryItem(${i}, -1)"
+                              >
+                                ◀
+                              </button>
+                              <button 
+                                type="button" 
+                                class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                                onclick="moveGalleryItem(${i}, 1)"
+                              >
+                                ▶
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      `
+                        )
+                        .join('')
+                }
+              </div>
+
+              <div 
+                id="gallery-dropzone"
+                class="glass rounded-2xl p-4 mt-3 flex flex-col items-center justify-center gap-3 cursor-pointer border border-dashed border-white/20 hover:border-violet-400 transition"
+                onclick="document.getElementById('gallery-image-input')?.click()"
+              >
+                <div class="text-3xl">🖼️</div>
+                <p class="text-sm text-white/70 text-center">برای افزودن تصاویر به گالری کلیک کنید یا فایل‌ها را اینجا رها کنید (حداکثر ۱۰ تصویر)</p>
+                <input 
+                  id="gallery-image-input"
+                  type="file" 
+                  accept="image/*" 
+                  multiple
+                  class="hidden"
+                  onchange="handleGalleryFiles(this.files)"
+                >
+              </div>
+            </div>
+            
+            <div>
+              <label for="product-description" class="block text-sm text-white/70 mb-2">توضیحات</label>
+              <textarea 
+                id="product-description" 
+                name="description" 
+                rows="3" 
+                class="w-full input-style resize-none"
+                placeholder="توضیحات محصول..."
+              >${product.description || d.description || ''}</textarea>
+            </div>
+          </div>
+          
+          <div class="flex gap-4 mt-8">
+            ${
+              isEdit
+                ? `
+                  <button 
+                    type="button" 
+                    class="flex-1 btn-danger py-4 rounded-xl font-semibold"
+                    onclick="
+                      state.confirmModal = {
+                        type: 'delete-product',
+                        title: 'حذف محصول',
+                        message: 'آیا از حذف «${product.title}» مطمئن هستید؟',
+                        icon: '🗑️',
+                        confirmText: 'حذف',
+                        confirmClass: 'btn-danger',
+                        onConfirm: () => {
+                          deleteProduct('${product.id}');
+                          state.confirmModal = null;
+                          state.editProduct = null;
+                          render();
+                        }
+                      };
+                      render();
+                    "
+                  >
+                    حذف محصول
+                  </button>
+                `
+                : ''
+            }
+            <button 
+              type="button" 
+              onclick="clearProductDraft()"
+              class="flex-1 btn-ghost py-4 rounded-xl font-semibold"
+            >
+              انصراف
+            </button>
+            <button 
+              type="submit" 
+              class="flex-1 btn-primary py-4 rounded-xl font-semibold"
+              ${state.loading ? 'disabled' : ''}
+            >
+              ${state.loading ? '⏳' : isEdit ? 'بروزرسانی' : 'ذخیره'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+/* ========== Reviews: per-product management (safe) ========== */
 
 function setReviewStatus(reviewId, status) {
-  const r = (state.reviews || []).find(x => x.id === reviewId);
+  const list = Array.isArray(state.reviews) ? state.reviews : [];
+  const r = list.find(x => x.id === reviewId);
   if (!r) return;
   r.status = status;
-  if (window.AppState) AppState.set({ reviews: state.reviews });
-  render();
-}
-
-function deleteReview(reviewId) {
-  state.reviews = (state.reviews || []).filter(r => r.id !== reviewId);
-  if (window.AppState) AppState.set({ reviews: state.reviews });
-  render();
-}
-
-function toggleReviewsListOpen() {
-  state.adminReviewsListOpen = !state.adminReviewsListOpen;
+  if (window.AppState) AppState.set({ reviews: list });
   render();
 }
 
 function renderAdminReviews() {
-  const products = Array.isArray(state.products) ? state.products : [];
   const reviews = Array.isArray(state.reviews) ? state.reviews : [];
+  const products = Array.isArray(state.products) ? state.products : [];
 
-  // فقط محصولاتی که نظر دارند
-  const productIdsWithReviews = [...new Set(reviews.map(r => r.product_id || r.productId))];
-  const productsWithReviews = products.filter(p => productIdsWithReviews.includes(p.id));
+  // گروه‌بندی بر اساس محصول
+  const byProduct = {};
+  reviews.forEach(r => {
+    const pid = r.product_id || r.productId || 'unknown';
+    if (!byProduct[pid]) byProduct[pid] = [];
+    byProduct[pid].push(r);
+  });
 
-  if (!state.adminReviewsSelectedProductId && productsWithReviews.length > 0) {
-    state.adminReviewsSelectedProductId = productsWithReviews[0].id;
+  // اگر محصول انتخاب نشده، اولین محصول دارای نظر را انتخاب کن
+  if (!state.adminReviewsSelectedProductId) {
+    const firstPid = Object.keys(byProduct)[0] || null;
+    state.adminReviewsSelectedProductId = firstPid;
   }
 
-  const activeProduct =
-    productsWithReviews.find(p => p.id === state.adminReviewsSelectedProductId) || productsWithReviews[0] || null;
-
-  const activeReviews = activeProduct ? getProductReviews(activeProduct.id) : [];
-
-  const pendingCount = activeReviews.filter(r => r.status === 'pending').length;
-
-  const drawerIcon = state.adminReviewsListOpen ? '▼' : '▲';
+  const activePid = state.adminReviewsSelectedProductId;
+  const activeReviews = activePid ? byProduct[activePid] || [] : [];
 
   return `
     <div class="animate-fade">
-      <div class="flex items-center justify-between mb-4">
-        <h1 class="text-2xl lg:text-3xl font-black flex items-center gap-2">
-          <span>نظرات کاربران</span>
+      <h1 class="text-2xl lg:text-3xl font-black mb-6">مدیریت نظرات 📝</h1>
+
+      <div class="grid lg:grid-cols-[260px,1fr] gap-4">
+        <!-- لیست محصولات با نظر -->
+        <div class="glass rounded-2xl p-3 max-h-[60vh] overflow-y-auto">
+          <h2 class="text-sm font-bold mb-3 flex items-center justify-between">
+            <span>محصولات</span>
+            <span class="text-xs text-white/50">${Object.keys(byProduct).length} مورد</span>
+          </h2>
           ${
-            pendingCount > 0
-              ? `<span class="badge bg-rose-500/20 text-rose-300 text-xs px-2 py-1 rounded-xl">در انتظار: ${pendingCount}</span>`
-              : ''
+            Object.keys(byProduct).length === 0
+              ? `<p class="text-xs text-white/60">هنوز نظری ثبت نشده است.</p>`
+              : Object.keys(byProduct)
+                  .map(pid => {
+                    const product = products.find(p => p.id === pid);
+                    const title = product?.title || `محصول #${pid.slice(-6)}`;
+                    const pendingCount = (byProduct[pid] || []).filter(r => r.status === 'pending').length;
+                    const isActive = pid === activePid;
+                    return `
+                    <button
+                      type="button"
+                      onclick="state.adminReviewsSelectedProductId='${pid}'; render()"
+                      class="w-full text-right px-3 py-2 rounded-xl mb-1 flex items-center justify-between text-xs ${
+                        isActive ? 'bg-violet-500/20 text-violet-200' : 'glass'
+                      }"
+                    >
+                      <span class="line-clamp-1">${title}</span>
+                      ${
+                        pendingCount > 0
+                          ? `<span class="bg-rose-500 text-[10px] px-1.5 py-0.5 rounded-full">${pendingCount}</span>`
+                          : ''
+                      }
+                    </button>
+                  `;
+                  })
+                  .join('')
           }
-        </h1>
-
-        <!-- کشوی لیست محصولات: فلش مثلثی -->
-        <button 
-          type="button"
-          class="lg:hidden flex items-center gap-2 text-xs glass px-3 py-1.5 rounded-xl"
-          onclick="toggleReviewsListOpen()"
-        >
-          <span>${drawerIcon}</span>
-          <span>لیست محصولات دارای نظر</span>
-        </button>
-      </div>
-
-      <div class="glass rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row gap-4 min-h-[380px]">
-
-        <!-- Product list drawer -->
-        <div class="${
-          state.adminReviewsListOpen ? 'block' : 'hidden lg:block'
-        } w-full lg:w-72 lg:max-w-xs flex-shrink-0">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-sm font-semibold text-white/80">محصولات دارای نظر</h2>
-            <span class="text-[11px] text-white/50">${productsWithReviews.length} محصول</span>
-          </div>
-          <div class="max-h-[260px] lg:max-h-[70vh] overflow-y-auto flex flex-col gap-2 pr-1">
-            ${
-              productsWithReviews.length === 0
-                ? `<div class="text-xs text-white/60 px-2 py-3">هنوز نظری ثبت نشده است.</div>`
-                : productsWithReviews
-                    .map(p => {
-                      const count = getProductReviews(p.id).length;
-                      const isActive = activeProduct && activeProduct.id === p.id;
-                      const imgSrc = p.image || p.main_image || '';
-                      return `
-                        <button
-                          type="button"
-                          onclick="state.adminReviewsSelectedProductId='${p.id}'; render()"
-                          class="w-full text-right glass rounded-xl px-3 py-2 flex items-center gap-3 text-xs ${
-                            isActive ? 'border border-violet-500/60 bg-violet-500/10' : ''
-                          }"
-                        >
-                          <div class="w-9 h-9 rounded-lg overflow-hidden bg-white/5 flex items-center justify-center flex-shrink-0">
-                            ${
-                              imgSrc
-                                ? `<img src="${imgSrc}" class="w-full h-full object-cover">`
-                                : `<span class="text-lg">📦</span>`
-                            }
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <div class="font-semibold line-clamp-1">${p.title}</div>
-                            <div class="text-[10px] text-white/50">${count} نظر</div>
-                          </div>
-                        </button>
-                      `;
-                    })
-                    .join('')
-            }
-          </div>
         </div>
 
-        <!-- Reviews list + actions -->
-        <div class="flex-1 min-w-0 glass rounded-2xl p-3 lg:p-4">
+        <!-- لیست نظرات محصول انتخاب شده -->
+        <div class="glass rounded-2xl p-4 flex flex-col max-h-[70vh] overflow-y-auto">
           ${
-            !activeProduct
-              ? `<div class="h-full flex items-center justify-center text-sm text-white/60">محصولی با نظر یافت نشد.</div>`
-              : `
-            <div class="flex items-center justify-between mb-3">
-              <div>
-                <h2 class="font-bold text-sm lg:text-base line-clamp-1">${activeProduct.title}</h2>
-                <p class="text-[11px] text-white/50 mt-0.5">
-                  ${
-                    (state.categories || []).find(c => c.id === activeProduct.category)?.title ||
-                    'بدون دسته‌بندی'
-                  }
-                </p>
-              </div>
-              <div class="text-[11px] text-white/50">
-                مجموع نظرات: ${activeReviews.length}
-              </div>
-            </div>
+            !activePid
+              ? `<p class="text-sm text-white/60">محصولی برای نمایش انتخاب نشده است.</p>`
+              : activeReviews.length === 0
+              ? `<p class="text-sm text-white/60">برای این محصول نظری ثبت نشده است.</p>`
+              : activeReviews
+                  .map(r => {
+                    const status = r.status || 'pending';
+                    const isPending = status === 'pending';
+                    const created = utils.formatDateTime(r.created_at || r.createdAt || '');
+                    const name = r.user_name || r.userName || 'کاربر';
+                    const rating = Number(r.rating || 0);
 
-            <div class="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-              ${
-                activeReviews.length === 0
-                  ? `<div class="text-xs text-white/60 px-2 py-3">برای این محصول نظری ثبت نشده است.</div>`
-                  : activeReviews
-                      .map(r => {
-                        const status = r.status || 'pending';
-                        const rating = Number(r.rating || 0);
-                        const stars =
-                          rating > 0
-                            ? '⭐'.repeat(Math.min(5, rating))
-                            : 'بدون امتیاز';
-                        const created = utils.formatDateTime(r.created_at || r.createdAt || '');
-                        const name = r.user_name || r.userName || 'کاربر';
-                        const phone = r.user_phone || r.userPhone || '';
-                        const statusLabel =
-                          status === 'approved'
-                            ? 'تایید شده'
-                            : status === 'rejected'
-                            ? 'رد شده'
-                            : 'در انتظار';
-                        const statusClass =
-                          status === 'approved'
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : status === 'rejected'
-                            ? 'bg-rose-500/15 text-rose-300'
-                            : 'bg-amber-500/15 text-amber-300';
-
-                        return `
-                          <div class="glass rounded-xl p-3 text-xs flex flex-col gap-2">
-                            <div class="flex items-center justify-between gap-2">
-                              <div class="flex items-center gap-2">
-                                <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[11px]">
-                                  ${name.trim()[0] || 'ک'}
-                                </div>
-                                <div>
-                                  <div class="font-semibold">${name}</div>
-                                  <div class="text-[10px] text-white/50">${phone}</div>
-                                </div>
-                              </div>
-                              <div class="text-right">
-                                <div class="text-[10px] text-white/50 mb-1">${created}</div>
-                                <div class="flex items-center gap-1 justify-end">
-                                  <span class="text-[11px]">${stars}</span>
-                                  <span class="px-2 py-0.5 rounded-xl text-[10px] ${statusClass}">
-                                    ${statusLabel}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div class="text-[11px] text-white/80 whitespace-pre-line border-t border-white/5 pt-2 mt-1">
-                              ${r.text || r.comment || ''}
-                            </div>
-
-                            <div class="flex items-center justify-end gap-2 pt-1">
-                              <button
-                                type="button"
-                                class="btn-ghost px-3 py-1 rounded-lg text-[11px]"
-                                onclick="setReviewStatus('${r.id}', 'approved')"
-                              >
-                                تایید
-                              </button>
-                              <button
-                                type="button"
-                                class="btn-ghost px-3 py-1 rounded-lg text-[11px]"
-                                onclick="setReviewStatus('${r.id}', 'rejected')"
-                              >
-                                رد
-                              </button>
-                              <button
-                                type="button"
-                                class="btn-ghost px-3 py-1 rounded-lg text-[11px] text-rose-300"
-                                onclick="deleteReview('${r.id}')"
-                              >
-                                حذف
-                              </button>
-                            </div>
-                          </div>
-                        `;
-                      })
-                      .join('')
-              }
-            </div>
-          `
+                    return `
+                    <div class="glass rounded-xl p-3 mb-3 text-xs">
+                      <div class="flex items-center justify-between mb-1.5">
+                        <div class="font-semibold">${name}</div>
+                        <div class="flex items-center gap-1">
+                          ${
+                            rating > 0
+                              ? `<span class="text-amber-400">${'★'.repeat(rating)}</span>`
+                              : ''
+                          }
+                          <span class="text-white/40">${created}</span>
+                        </div>
+                      </div>
+                      <p class="text-white/80 mb-2 whitespace-pre-line">${r.text || r.comment || ''}</p>
+                      <div class="flex items-center justify-between">
+                        <span class="text-[10px] ${
+                          isPending
+                            ? 'text-amber-400'
+                            : status === 'approved'
+                            ? 'text-emerald-400'
+                            : 'text-rose-400'
+                        }">
+                          ${
+                            isPending
+                              ? 'در انتظار بررسی'
+                              : status === 'approved'
+                              ? 'تایید شده'
+                              : 'رد شده'
+                          }
+                        </span>
+                        <div class="flex gap-1">
+                          <button
+                            type="button"
+                            class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                            onclick="setReviewStatus('${r.id}', 'approved')"
+                          >
+                            تایید
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                            onclick="setReviewStatus('${r.id}', 'rejected')"
+                          >
+                            رد
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                  })
+                  .join('')
           }
         </div>
       </div>
@@ -859,26 +1368,7 @@ function renderAdminSupportQuickReplies() {
   `;
 }
 
-function handleSupportSendMessage(form, ticketId) {
-  event.preventDefault();
-  const text = (form.message.value || '').trim();
-  if (!text) return;
-  const ticket = (state.tickets || []).find(t => t.id === ticketId);
-  if (!ticket) return;
-  addTicketMessage(ticket, { from: 'admin', text }).then(ok => {
-    if (ok) form.reset();
-  });
-}
-
-function applyQuickReplyToTicket(ticketId, replyId) {
-  const ticket = (state.tickets || []).find(t => t.id === ticketId);
-  if (!ticket) return;
-  const reply = (state.supportQuickReplies || []).find(q => q.id === replyId);
-  if (!reply) return;
-  addTicketMessage(ticket, { from: 'admin', text: reply.text });
-}
-
-/* Main support renderer (with scrollable ticket list + chat) */
+/* Main support renderer (with scrollable ticket list + chat, mobile-friendly) */
 
 function renderAdminSupportSafe() {
   const allTickets = Array.isArray(state.tickets) ? state.tickets : [];
@@ -1000,10 +1490,10 @@ function renderAdminSupportSafe() {
           ? renderAdminSupportQuickReplies()
           : `
         <!-- Messenger layout -->
-        <div class="glass rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row gap-3 min-h-[420px] lg:min-h-[480px]">
+        <div class="glass rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row gap-3 min-h-[420px] lg:min-h-[480px] max-h-[80vh]">
 
-          <!-- Ticket list (scrollable) -->
-          <div class="w-full lg:w-80 lg:max-w-xs flex-shrink-0 flex flex-col gap-2 max-h-[260px] lg:max-h-[70vh] overflow-y-auto pr-1">
+          <!-- Ticket list (scrollable, mobile-safe) -->
+          <div class="w-full lg:w-80 lg:max-w-xs flex-shrink-0 flex flex-col gap-2 max-h-[220px] lg:max-h-[70vh] overflow-y-auto pr-1">
             ${
               filtered.length === 0
                 ? `<div class="text-sm text-white/60 px-2 py-3">تیکتی یافت نشد.</div>`
@@ -1016,32 +1506,30 @@ function renderAdminSupportSafe() {
                       const name = t.user_name || 'کاربر';
                       const phone = t.user_phone || '-';
                       const initial = name.trim()[0] || 'ک';
-                      const created = utils.formatDateTime(t.created_at || t.createdAt || '');
-                      const priorityBadge =
-                        priority === 'urgent'
-                          ? '<span class="text-[10px] px-2 py-0.5 rounded-xl bg-rose-500/20 text-rose-300">فوری</span>'
-                          : '<span class="text-[10px] px-2 py-0.5 rounded-xl bg-white/10 text-white/60">عادی</span>';
 
                       return `
                         <button
                           type="button"
                           onclick="state.adminSupportSelectedTicketId='${t.id}'; render()"
-                          class="w-full text-right glass rounded-xl px-3 py-2 flex items-center gap-3 text-xs ${
+                          class="glass rounded-xl px-3 py-2 text-right text-xs flex items-center gap-2 ${
                             isActive ? 'border border-violet-500/60 bg-violet-500/10' : ''
                           }"
                         >
-                          <div class="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0">
-                            <span class="text-[13px]">${initial}</span>
+                          <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm flex-shrink-0">
+                            ${initial}
                           </div>
                           <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between gap-2 mb-0.5">
+                            <div class="flex items-center justify-between gap-1 mb-0.5">
                               <span class="font-semibold line-clamp-1">${name}</span>
-                              ${priorityBadge}
+                              ${
+                                priority === 'urgent'
+                                  ? `<span class="text-[10px] text-rose-400">فوری</span>`
+                                  : ''
+                              }
                             </div>
-                            <div class="text-[10px] text-white/50 line-clamp-1">
-                              ${lastMsg ? lastMsg.text : 'بدون پیام'}
+                            <div class="text-[10px] text-white/60 line-clamp-1">
+                              ${lastMsg ? lastMsg.text : phone}
                             </div>
-                            <div class="text-[9px] text-white/40 mt-0.5">${created}</div>
                           </div>
                         </button>
                       `;
@@ -1050,59 +1538,52 @@ function renderAdminSupportSafe() {
             }
           </div>
 
-          <!-- Chat area -->
-          <div class="flex-1 min-w-0 glass rounded-2xl p-3 lg:p-4 flex flex-col">
+          <!-- Chat area (scrollable bottom section on mobile) -->
+          <div class="flex-1 flex flex-col gap-2 max-h-[70vh]">
             ${
               !activeTicket
                 ? `<div class="flex-1 flex items-center justify-center text-sm text-white/60">تیکتی انتخاب نشده است.</div>`
                 : `
-              <div class="flex items-center justify-between mb-3 text-xs">
+              <div class="glass rounded-xl p-3 flex items-center justify-between text-xs">
                 <div>
-                  <div class="font-semibold text-sm">${activeTicket.user_name || 'کاربر'}</div>
-                  <div class="text-[11px] text-white/60">${activeTicket.user_phone || '-'}</div>
+                  <div class="font-semibold">${activeTicket.user_name || 'کاربر'}</div>
+                  <div class="text-white/60">${activeTicket.user_phone || '-'}</div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <select
-                    class="text-[11px] bg-white/5 border border-white/15 rounded-xl px-2 py-1"
-                    onchange="
-                      const t = (state.tickets || []).find(x => x.id === '${activeTicket.id}');
-                      if(t) updateTicketStatus(t, this.value);
-                    "
-                  >
-                    <option value="open" ${activeTicket.status === 'open' ? 'selected' : ''}>باز</option>
-                    <option value="closed" ${activeTicket.status === 'closed' ? 'selected' : ''}>بسته</option>
-                  </select>
+                <div class="flex gap-1">
                   <button
                     type="button"
-                    class="btn-ghost px-3 py-1 rounded-lg text-[11px]"
-                    onclick="
-                      const t = (state.tickets || []).find(x => x.id === '${activeTicket.id}');
-                      if(t) closeTicket(t);
-                    "
+                    class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                    onclick="updateTicketStatus(state.tickets.find(t=>t.id==='${activeTicket.id}'),'open')"
                   >
-                    بستن تیکت
+                    باز
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-ghost px-2 py-1 rounded-lg text-[10px]"
+                    onclick="closeTicket(state.tickets.find(t=>t.id==='${activeTicket.id}'))"
+                  >
+                    بستن
                   </button>
                 </div>
               </div>
 
-              <div class="flex-1 min-h-0 max-h-[260px] lg:max-h-[60vh] overflow-y-auto mb-3 space-y-2 pr-1">
+              <!-- messages (scrollable) -->
+              <div class="flex-1 glass rounded-xl p-3 overflow-y-auto">
                 ${
                   activeMessages.length === 0
-                    ? `<div class="text-xs text-white/60 px-2 py-3">هنوز پیامی در این تیکت ثبت نشده است.</div>`
+                    ? `<p class="text-xs text-white/60">پیامی ثبت نشده است.</p>`
                     : activeMessages
                         .map(m => {
                           const isAdmin = m.from === 'admin';
-                          const align = isAdmin ? 'items-end' : 'items-start';
-                          const bubble =
-                            isAdmin
-                              ? 'bg-violet-500/30 text-white border border-violet-400/40'
-                              : 'bg-white/10 text-white border border-white/10';
-                          const time = utils.formatDateTime(m.at || m.created_at || '');
                           return `
-                            <div class="flex ${align}">
-                              <div class="max-w-[80%] glass rounded-2xl px-3 py-2 text-xs ${bubble}">
+                            <div class="mb-2 flex ${isAdmin ? 'justify-start' : 'justify-end'}">
+                              <div class="max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
+                                isAdmin ? 'bg-violet-500/30' : 'bg-white/10'
+                              }">
+                                <div class="mb-0.5 text-[10px] text-white/60">
+                                  ${utils.formatDateTime(m.at || '')}
+                                </div>
                                 <div class="whitespace-pre-line">${m.text}</div>
-                                <div class="text-[9px] text-white/60 mt-1 text-left">${time}</div>
                               </div>
                             </div>
                           `;
@@ -1111,38 +1592,29 @@ function renderAdminSupportSafe() {
                 }
               </div>
 
+              <!-- input (bottom, stays visible, mobile scroll-safe) -->
               <form
-                class="mt-auto pt-2 border-t border-white/10 space-y-2"
-                onsubmit="handleSupportSendMessage(this, '${activeTicket.id}')"
+                class="mt-2 flex items-center gap-2"
+                onsubmit="
+                  event.preventDefault();
+                  const t = (state.tickets || []).find(x => x.id === '${activeTicket.id}');
+                  const text = this.message.value;
+                  addTicketMessage(t, { from: 'admin', text });
+                  this.message.value='';
+                "
               >
-                <div class="flex items-center gap-2">
-                  <select
-                    class="text-[11px] bg-white/5 border border-white/15 rounded-xl px-2 py-1"
-                    onchange="if(this.value){ applyQuickReplyToTicket('${activeTicket.id}', this.value); this.value=''; }"
-                  >
-                    <option value="">پاسخ آماده...</option>
-                    ${
-                      (state.supportQuickReplies || [])
-                        .map(q => `<option value="${q.id}">${q.label}</option>`)
-                        .join('')
-                    }
-                  </select>
-                  <span class="text-[10px] text-white/40">برای درج سریع پاسخ آماده</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <textarea
-                    name="message"
-                    rows="1"
-                    class="flex-1 input-style resize-none text-xs"
-                    placeholder="نوشتن پاسخ..."
-                  ></textarea>
-                  <button
-                    type="submit"
-                    class="btn-primary px-4 py-2 rounded-xl text-xs font-semibold"
-                  >
-                    ارسال
-                  </button>
-                </div>
+                <textarea
+                  name="message"
+                  rows="1"
+                  class="flex-1 input-style resize-none text-xs max-h-24"
+                  placeholder="نوشتن پاسخ..."
+                ></textarea>
+                <button
+                  type="submit"
+                  class="btn-primary px-3 py-2 rounded-xl text-xs flex items-center gap-1"
+                >
+                  <span>ارسال</span>
+                </button>
               </form>
             `
             }

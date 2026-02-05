@@ -34,7 +34,7 @@ function renderHomePage() {
           id: 'about3',
           title: 'پشتیبانی و توسعه مداوم',
           text: 'سیستم‌ها به صورت مداوم به‌روزرسانی می‌شوند تا همیشه در بالاترین سطح کیفیت و امنیت باقی بمانند.',
-          image: 'P3.png'
+          image: 'p3.png'
         }
       ];
 
@@ -225,3 +225,4 @@ function renderHomePage() {
   `;
 
 }
+

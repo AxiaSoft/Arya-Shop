@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// ADMIN PANEL (GPT‑5 FINAL + MOBILE BOTTOM SHEET MENU)
+// ADMIN PANEL (GPT‑5 FINAL + FIXED SHEET + REVIEWS)
 // File: assets/js/admin panel.js
 // ═══════════════════════════════════════════════════════════════
 
@@ -22,18 +22,105 @@ state.adminTab = state.adminTab || 'dashboard';
 
 state.categoryModal = state.categoryModal || null;
 
-// Bottom sheet state (mobile)
-state.sheet = state.sheet || {
+/* ========== Bottom sheet local state (no re-render on drag) ========== */
+
+let sheetState = {
   open: false,
   dragging: false,
-  progress: 0 // 0 = بسته، 1 = باز (نیم صفحه)
+  startY: 0,
+  startTranslate: 0,
+  height: 0
 };
 
-let _sheetDrag = {
-  active: false,
-  startY: 0,
-  startProgress: 0
-};
+function getSheetElements() {
+  const sheet = document.querySelector('.admin-sheet');
+  const backdrop = document.querySelector('.admin-sheet-backdrop');
+  const trigger = document.querySelector('.admin-sheet-trigger');
+  return { sheet, backdrop, trigger };
+}
+
+function sheetToggle(forceOpen) {
+  const { sheet, backdrop, trigger } = getSheetElements();
+  if (!sheet || !backdrop || !trigger) return;
+
+  const nextOpen =
+    typeof forceOpen === 'boolean'
+      ? forceOpen
+      : !sheetState.open;
+
+  sheetState.open = nextOpen;
+  sheetState.dragging = false;
+
+  sheet.classList.toggle('sheet-open', nextOpen);
+  backdrop.classList.toggle('sheet-open', nextOpen);
+  trigger.classList.toggle('hidden-trigger', nextOpen);
+
+  sheet.style.transform = '';
+}
+
+function sheetDragStart(e) {
+  const { sheet } = getSheetElements();
+  if (!sheet) return;
+
+  const target = e.target;
+  if (!target.closest('.admin-sheet-handle')) return;
+
+  const isTouch = e.type === 'touchstart';
+  const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+  sheetState.dragging = true;
+  sheetState.startY = clientY;
+  sheetState.height = Math.min(window.innerHeight * 0.5, 480);
+  sheetState.startTranslate = sheetState.open ? 0 : sheetState.height;
+
+  if (!isTouch) {
+    window.addEventListener('mousemove', sheetDragMove);
+    window.addEventListener('mouseup', sheetDragEnd);
+  } else {
+    window.addEventListener('touchmove', sheetDragMove, { passive: false });
+    window.addEventListener('touchend', sheetDragEnd);
+    window.addEventListener('touchcancel', sheetDragEnd);
+  }
+}
+
+function sheetDragMove(e) {
+  if (!sheetState.dragging) return;
+  const { sheet } = getSheetElements();
+  if (!sheet) return;
+
+  const isTouch = e.type === 'touchmove';
+  const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+  if (isTouch) e.preventDefault();
+
+  const dy = clientY - sheetState.startY;
+  let translate = sheetState.startTranslate + dy;
+  if (translate < 0) translate = 0;
+  if (translate > sheetState.height) translate = sheetState.height;
+
+  const percent = (translate / sheetState.height) * 100;
+  sheet.style.transform = `translateY(${percent}%)`;
+}
+
+function sheetDragEnd() {
+  if (!sheetState.dragging) return;
+  sheetState.dragging = false;
+
+  const { sheet } = getSheetElements();
+  if (!sheet) return;
+
+  const match = /translateY\(([-\d.]+)%\)/.exec(sheet.style.transform || '');
+  const percent = match ? parseFloat(match[1]) : (sheetState.open ? 0 : 100);
+
+  const shouldOpen = percent < 50;
+  sheetToggle(shouldOpen);
+
+  window.removeEventListener('mousemove', sheetDragMove);
+  window.removeEventListener('mouseup', sheetDragEnd);
+  window.removeEventListener('touchmove', sheetDragMove);
+  window.removeEventListener('touchend', sheetDragEnd);
+  window.removeEventListener('touchcancel', sheetDragEnd);
+}
 
 /* ========== Root admin panel renderer ========== */
 
@@ -48,16 +135,6 @@ function renderAdminPanel() {
   ];
 
   const pendingReviewsCount = (state.reviews || []).filter(r => r.status === 'pending').length;
-
-  const sheetProgress =
-    typeof state.sheet.progress === 'number'
-      ? state.sheet.progress
-      : state.sheet.open
-      ? 1
-      : 0;
-  const sheetTranslateY = (1 - sheetProgress) * 100;
-
-  const showTrigger = !state.sheet.open;
 
   return `
     <div class="flex flex-col lg:flex-row min-h-screen">
@@ -78,9 +155,7 @@ function renderAdminPanel() {
               tab => `
             <button 
               onclick="state.adminTab='${tab.id}'; render()"
-              class="sidebar-item w-full text-right px-5 py-4 flex items-center justify-between text-sm ${
-                state.adminTab === tab.id ? 'active' : ''
-              }" type="button"
+              class="sidebar-item w-full text-right px-5 py-4 flex items-center justify-between text-sm ${state.adminTab === tab.id ? 'active' : ''}" type="button"
             >
               <div class="flex items-center gap-3">
                 <span class="relative text-xl">
@@ -133,7 +208,7 @@ function renderAdminPanel() {
       <!-- Mobile Bottom Sheet Trigger -->
       <button
         type="button"
-        class="admin-sheet-trigger lg:hidden ${showTrigger ? '' : 'hidden-trigger'}"
+        class="admin-sheet-trigger lg:hidden ${sheetState.open ? 'hidden-trigger' : ''}"
         onclick="sheetToggle(true)"
       >
         <span class="icon">⬆️</span>
@@ -142,18 +217,15 @@ function renderAdminPanel() {
 
       <!-- Mobile Bottom Sheet Backdrop -->
       <div 
-        class="admin-sheet-backdrop ${state.sheet.open ? 'sheet-open' : ''} lg:hidden"
+        class="admin-sheet-backdrop lg:hidden ${sheetState.open ? 'sheet-open' : ''}"
         onclick="sheetToggle(false)"
       ></div>
 
       <!-- Mobile Bottom Sheet (Tabs) -->
       <div 
-        class="admin-sheet lg:hidden ${state.sheet.open ? 'sheet-open' : ''} ${state.sheet.dragging ? 'sheet-dragging' : ''}"
-        style="transform: translateY(${sheetTranslateY}%);"
-        onmousedown="sheetDragStart(event)"
-        ontouchstart="sheetDragStart(event)"
+        class="admin-sheet lg:hidden ${sheetState.open ? 'sheet-open' : ''}"
       >
-        <div class="admin-sheet-header">
+        <div class="admin-sheet-header" onmousedown="sheetDragStart(event)" ontouchstart="sheetDragStart(event)">
           <div class="admin-sheet-handle"></div>
           <div class="admin-sheet-toggle-icon" onclick="sheetToggle()">
             ▲
@@ -166,7 +238,7 @@ function renderAdminPanel() {
                 <button
                   type="button"
                   class="admin-sheet-tab-btn ${state.adminTab === tab.id ? 'active' : ''}"
-                  onclick="state.adminTab='${tab.id}'; sheetToggle(false);"
+                  onclick="state.adminTab='${tab.id}'; render()"
                 >
                   <span>
                     <span class="tab-icon">${tab.icon}</span>
@@ -189,90 +261,6 @@ function renderAdminPanel() {
   `;
 }
 
-/* ========== Bottom sheet logic (mobile) ========== */
-
-function sheetToggle(forceOpen) {
-  const nextOpen =
-    typeof forceOpen === 'boolean'
-      ? forceOpen
-      : !state.sheet.open;
-
-  state.sheet.open = nextOpen;
-  state.sheet.dragging = false;
-  state.sheet.progress = nextOpen ? 1 : 0;
-  render();
-}
-
-function sheetDragStart(e) {
-  const isTouch = e.type === 'touchstart';
-  const clientY = isTouch ? e.touches[0].clientY : e.clientY;
-
-  _sheetDrag.active = true;
-  _sheetDrag.startY = clientY;
-  _sheetDrag.startProgress =
-    typeof state.sheet.progress === 'number'
-      ? state.sheet.progress
-      : state.sheet.open
-      ? 1
-      : 0;
-
-  state.sheet.dragging = true;
-
-  if (!isTouch) {
-    window.addEventListener('mousemove', sheetDragMove);
-    window.addEventListener('mouseup', sheetDragEnd);
-  } else {
-    window.addEventListener('touchmove', sheetDragMove, { passive: false });
-    window.addEventListener('touchend', sheetDragEnd);
-    window.addEventListener('touchcancel', sheetDragEnd);
-  }
-}
-
-function sheetDragMove(e) {
-  if (!_sheetDrag.active) return;
-
-  const isTouch = e.type === 'touchmove';
-  const clientY = isTouch ? e.touches[0].clientY : e.clientY;
-
-  if (isTouch) e.preventDefault();
-
-  const dy = clientY - _sheetDrag.startY;
-  const sheetHeight = Math.min(window.innerHeight * 0.5, 480);
-  const delta = dy / sheetHeight;
-
-  let p = _sheetDrag.startProgress - delta;
-  if (p < 0) p = 0;
-  if (p > 1) p = 1;
-
-  state.sheet.progress = p;
-  render();
-}
-
-function sheetDragEnd() {
-  if (!_sheetDrag.active) return;
-  _sheetDrag.active = false;
-
-  const p =
-    typeof state.sheet.progress === 'number'
-      ? state.sheet.progress
-      : state.sheet.open
-      ? 1
-      : 0;
-
-  const shouldOpen = p > 0.5;
-  state.sheet.open = shouldOpen;
-  state.sheet.progress = shouldOpen ? 1 : 0;
-  state.sheet.dragging = false;
-
-  window.removeEventListener('mousemove', sheetDragMove);
-  window.removeEventListener('mouseup', sheetDragEnd);
-  window.removeEventListener('touchmove', sheetDragMove);
-  window.removeEventListener('touchend', sheetDragEnd);
-  window.removeEventListener('touchcancel', sheetDragEnd);
-
-  render();
-}
-
 /* ========== Helper wrapper to align legacy select to new API ========== */
 
 function updateOrderStatus(order, nextStatus) {
@@ -291,10 +279,10 @@ function openCategoryModal(mode, id = null) {
       selectedProducts: []
     };
   } else {
-    const cat = state.categories.find(c => c.id === id);
+    const cat = (state.categories || []).find(c => c.id === id);
     if (!cat) return;
 
-    const selectedProducts = state.products.filter(p => p.category === id).map(p => p.id);
+    const selectedProducts = (state.products || []).filter(p => p.category === id).map(p => p.id);
 
     state.categoryModal = {
       mode: 'edit',
@@ -320,6 +308,9 @@ function saveCategoryModal() {
     toast('نام دسته‌بندی الزامی است', 'warning');
     return;
   }
+
+  state.categories = Array.isArray(state.categories) ? state.categories : [];
+  state.products = Array.isArray(state.products) ? state.products : [];
 
   if (m.mode === 'add') {
     const id = utils.generateId();
@@ -355,6 +346,9 @@ function saveCategoryModal() {
 }
 
 function deleteCategoryWithConfirm(id) {
+  state.categories = Array.isArray(state.categories) ? state.categories : [];
+  state.products = Array.isArray(state.products) ? state.products : [];
+
   const cat = state.categories.find(c => c.id === id);
   if (!cat) return;
 
@@ -382,6 +376,8 @@ function deleteCategoryWithConfirm(id) {
 function renderCategoryModal() {
   const m = state.categoryModal;
   if (!m) return '';
+
+  state.products = Array.isArray(state.products) ? state.products : [];
 
   const uncategorized = state.products.filter(p => !p.category || p.category === m.id);
 
@@ -488,6 +484,8 @@ function renderCategoryModal() {
 }
 
 function renderAdminCategoriesEditor() {
+  state.categories = Array.isArray(state.categories) ? state.categories : [];
+
   return `
     <div class="animate-fade">
       <div class="flex items-center justify-between mb-6">
@@ -498,7 +496,7 @@ function renderAdminCategoriesEditor() {
       </div>
 
       <div class="grid gap-3">
-        ${(state.categories || [])
+        ${state.categories
           .map(
             (c, i) => `
           <div class="glass rounded-xl p-4 flex items-center justify-between animate-fade" style="animation-delay:${i *
@@ -515,6 +513,244 @@ function renderAdminCategoriesEditor() {
         `
           )
           .join('')}
+      </div>
+    </div>
+  `;
+}
+
+/* ========== Reviews: product-based moderation + like/dislike ========== */
+
+function normalizeReview(r) {
+  if (!r) return null;
+  r.status = r.status || 'pending';
+  r.likes = typeof r.likes === 'number' ? r.likes : parseInt(r.likes || '0', 10) || 0;
+  r.dislikes = typeof r.dislikes === 'number' ? r.dislikes : parseInt(r.dislikes || '0', 10) || 0;
+  return r;
+}
+
+function getReviewProductId(r) {
+  return r.product_id || r.productId || r.product || 'unknown';
+}
+
+function getReviewProductTitle(r) {
+  return r.product_title || r.productTitle || r.product_name || 'محصول بدون نام';
+}
+
+function setReviewStatus(id, status) {
+  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
+  const r = state.reviews.find(x => x.id === id);
+  if (!r) return;
+  r.status = status;
+  render();
+}
+
+function reactToReview(id, reaction) {
+  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
+  const r = state.reviews.find(x => x.id === id);
+  if (!r) return;
+
+  normalizeReview(r);
+
+  // واکنش ادمین را برای جلوگیری از لایک و دیسلایک همزمان ذخیره می‌کنیم
+  const prev = r._adminReaction || null;
+
+  if (reaction === 'like') {
+    if (prev === 'like') {
+      r.likes = Math.max(0, r.likes - 1);
+      r._adminReaction = null;
+    } else {
+      if (prev === 'dislike') r.dislikes = Math.max(0, r.dislikes - 1);
+      r.likes += 1;
+      r._adminReaction = 'like';
+    }
+  } else if (reaction === 'dislike') {
+    if (prev === 'dislike') {
+      r.dislikes = Math.max(0, r.dislikes - 1);
+      r._adminReaction = null;
+    } else {
+      if (prev === 'like') r.likes = Math.max(0, r.likes - 1);
+      r.dislikes += 1;
+      r._adminReaction = 'dislike';
+    }
+  }
+
+  render();
+}
+
+function renderAdminReviews() {
+  state.reviews = Array.isArray(state.reviews) ? state.reviews.map(normalizeReview) : [];
+
+  const byProduct = {};
+  state.reviews.forEach(r => {
+    const pid = getReviewProductId(r);
+    if (!byProduct[pid]) {
+      byProduct[pid] = {
+        id: pid,
+        title: getReviewProductTitle(r),
+        reviews: []
+      };
+    }
+    byProduct[pid].reviews.push(r);
+  });
+
+  const productIds = Object.keys(byProduct);
+  if (!state.adminReviewsSelectedProductId && productIds.length > 0) {
+    state.adminReviewsSelectedProductId = productIds[0];
+  }
+
+  const activeProductId = state.adminReviewsSelectedProductId;
+  const activeProduct = activeProductId ? byProduct[activeProductId] : null;
+  const activeReviews = activeProduct ? activeProduct.reviews : [];
+
+  const pendingCount = state.reviews.filter(r => r.status === 'pending').length;
+
+  return `
+    <div class="animate-fade">
+      <div class="flex flex-col lg:flex-row gap-6">
+        
+        <!-- Products list -->
+        <aside class="lg:w-72 glass rounded-2xl p-4 h-max max-h-[70vh] overflow-y-auto">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold flex items-center gap-2">
+              <span>📝</span>
+              <span>محصولات با نظر</span>
+            </h2>
+            ${
+              pendingCount > 0
+                ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">در انتظار: ${pendingCount}</span>`
+                : ''
+            }
+          </div>
+          ${
+            productIds.length === 0
+              ? `<p class="text-xs text-white/60">هنوز نظری ثبت نشده است.</p>`
+              : productIds
+                  .map(pid => {
+                    const p = byProduct[pid];
+                    const pPending = p.reviews.filter(r => r.status === 'pending').length;
+                    return `
+                      <button
+                        type="button"
+                        class="w-full text-right px-3 py-2 rounded-xl text-xs mb-1 flex items-center justify-between ${activeProductId === pid ? 'bg-white/10' : 'glass hover:bg-white/10'}"
+                        onclick="state.adminReviewsSelectedProductId='${pid}'; render()"
+                      >
+                        <span class="line-clamp-1">${p.title}</span>
+                        <span class="flex items-center gap-1 text-[10px] text-white/60">
+                          <span>${p.reviews.length} نظر</span>
+                          ${
+                            pPending > 0
+                              ? `<span class="px-1.5 py-0.5 rounded-full bg-rose-500/30 text-rose-100">${pPending}</span>`
+                              : ''
+                          }
+                        </span>
+                      </button>
+                    `;
+                  })
+                  .join('')
+          }
+        </aside>
+
+        <!-- Reviews list -->
+        <section class="flex-1">
+          ${
+            !activeProduct
+              ? `<div class="glass rounded-2xl p-10 text-center text-sm text-white/60">
+                  محصولی برای نمایش نظرات انتخاب نشده است.
+                </div>`
+              : `
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h1 class="text-xl lg:text-2xl font-black mb-1">نظرات محصول</h1>
+                <p class="text-xs text-white/60 line-clamp-1">${activeProduct.title}</p>
+              </div>
+              <div class="text-xs text-white/60">
+                <span>کل نظرات: ${activeReviews.length}</span>
+              </div>
+            </div>
+
+            ${
+              activeReviews.length === 0
+                ? `<div class="glass rounded-2xl p-10 text-center text-sm text-white/60">
+                    برای این محصول نظری ثبت نشده است.
+                  </div>`
+                : `
+              <div class="space-y-3 max-h-[70vh] overflow-y-auto">
+                ${activeReviews
+                  .map(r => {
+                    const created = r.created_at || r.createdAt || '';
+                    const rating = typeof r.rating === 'number' ? r.rating : parseInt(r.rating || '0', 10) || 0;
+                    const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, rating)));
+                    const emptyStars = '☆☆☆☆☆'.slice(stars.length);
+                    return `
+                      <div class="glass rounded-2xl p-4 text-sm">
+                        <div class="flex items-center justify-between mb-2">
+                          <div>
+                            <div class="font-semibold text-sm">${r.user_name || r.userName || 'کاربر ناشناس'}</div>
+                            <div class="text-[11px] text-white/50">${utils.formatDateTime(created)}</div>
+                          </div>
+                          <div class="text-xs text-amber-300 font-mono">
+                            <span class="text-base">${stars}<span class="text-white/20">${emptyStars}</span></span>
+                            ${rating ? `<span class="ml-1 text-[11px] text-white/60">(${rating}/5)</span>` : ''}
+                          </div>
+                        </div>
+
+                        <p class="text-sm text-white/80 whitespace-pre-line mb-3">${r.text || r.comment || ''}</p>
+
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="flex items-center gap-2 text-[11px]">
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg flex items-center gap-1 ${r._adminReaction === 'like' ? 'bg-emerald-500/20 text-emerald-300' : 'glass text-white/70 hover:bg-white/10'}"
+                              onclick="reactToReview('${r.id}', 'like')"
+                            >
+                              👍 <span>${r.likes}</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg flex items-center gap-1 ${r._adminReaction === 'dislike' ? 'bg-rose-500/20 text-rose-300' : 'glass text-white/70 hover:bg-white/10'}"
+                              onclick="reactToReview('${r.id}', 'dislike')"
+                            >
+                              👎 <span>${r.dislikes}</span>
+                            </button>
+                          </div>
+
+                          <div class="flex items-center gap-2 text-[11px]">
+                            <span class="px-2 py-1 rounded-lg bg-white/5 text-white/70">
+                              ${
+                                r.status === 'approved'
+                                  ? '✅ تایید شده'
+                                  : r.status === 'rejected'
+                                  ? '⛔ رد شده'
+                                  : '⏳ در انتظار'
+                              }
+                            </span>
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                              onclick="setReviewStatus('${r.id}', 'approved')"
+                            >
+                              تایید
+                            </button>
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-200 hover:bg-rose-500/30"
+                              onclick="setReviewStatus('${r.id}', 'rejected')"
+                            >
+                              رد
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join('')}
+              </div>
+            `
+            }
+          `
+          }
+        </section>
+
       </div>
     </div>
   `;
@@ -806,10 +1042,10 @@ function renderAdminSupportSafe() {
               b => `
             <button
               type="button"
-              onclick="state.supportFilter.status='${b.value}'; render()"
-              class="px-3 py-1.5 rounded-xl text-xs ${
-                state.supportFilter.status === b.value ? 'bg-violet-500 text-white' : 'glass'
+              class="px-3 py-1.5 rounded-xl text-xs font-medium ${
+                state.supportFilter.status === b.value ? 'bg-violet-500 text-white' : 'glass hover:bg-white/10'
               }"
+              onclick="state.supportFilter.status='${b.value}'; render()"
             >
               ${b.label}
             </button>
@@ -817,6 +1053,7 @@ function renderAdminSupportSafe() {
             )
             .join('')}
         </div>
+
         <div class="flex flex-wrap gap-2">
           <span class="text-xs text-white/60">اولویت:</span>
           ${priorityButtons
@@ -824,10 +1061,10 @@ function renderAdminSupportSafe() {
               b => `
             <button
               type="button"
-              onclick="state.supportFilter.priority='${b.value}'; render()"
-              class="px-3 py-1.5 rounded-xl text-xs ${
-                state.supportFilter.priority === b.value ? 'bg-amber-500 text-white' : 'glass'
+              class="px-3 py-1.5 rounded-xl text-xs font-medium ${
+                state.supportFilter.priority === b.value ? 'bg-amber-500 text-white' : 'glass hover:bg-white/10'
               }"
+              onclick="state.supportFilter.priority='${b.value}'; render()"
             >
               ${b.label}
             </button>
@@ -835,297 +1072,141 @@ function renderAdminSupportSafe() {
             )
             .join('')}
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onclick="state.supportFilter.view='all'; render()"
-            class="px-3 py-1.5 rounded-xl text-xs ${
-              state.supportFilter.view === 'all' ? 'bg-emerald-500 text-white' : 'glass'
-            }"
-          >
-            همه تیکت‌ها
-          </button>
-          <button
-            type="button"
-            onclick="state.supportFilter.view='urgent'; render()"
-            class="px-3 py-1.5 rounded-xl text-xs ${
-              state.supportFilter.view === 'urgent' ? 'bg-rose-500 text-white' : 'glass'
-            }"
-          >
-            تیکت‌های فوری
-          </button>
-          <button
-            type="button"
-            onclick="state.supportFilter.view='quick'; render()"
-            class="px-3 py-1.5 rounded-xl text-xs ${
-              state.supportFilter.view === 'quick' ? 'bg-blue-500 text-white' : 'glass'
-            }"
-          >
-            پاسخ‌های آماده
-          </button>
-        </div>
       </div>
 
-      ${
-        state.supportFilter.view === 'quick'
-          ? renderAdminSupportQuickReplies()
-          : `
-        <div class="glass rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row gap-3 min-h-[420px] lg:min-h-[480px]">
+      <div class="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4">
+        <div class="glass rounded-2xl p-4 max-h-[70vh] overflow-y-auto">
+          ${
+            filtered.length === 0
+              ? `<p class="text-sm text-white/60">تیکتی یافت نشد.</p>`
+              : filtered
+                  .map(t => {
+                    const isActive = activeTicket && activeTicket.id === t.id;
+                    const isUrgent = (t.priority || 'normal') === 'urgent';
+                    return `
+                      <button
+                        type="button"
+                        class="w-full text-right mb-2 px-3 py-2 rounded-xl text-xs flex items-center justify-between ${
+                          isActive ? 'bg-white/10' : 'glass hover:bg-white/10'
+                        }"
+                        onclick="state.adminSupportSelectedTicketId='${t.id}'; render()"
+                      >
+                        <div class="flex flex-col gap-0.5">
+                          <span class="font-semibold line-clamp-1">${t.subject || 'بدون عنوان'}</span>
+                          <span class="text-[11px] text-white/60 line-clamp-1">${t.user_name || t.userName || 'کاربر'}</span>
+                        </div>
+                        <div class="flex flex-col items-end gap-0.5 text-[10px] text-white/60">
+                          <span>${utils.formatDateTime(t.created_at || '')}</span>
+                          ${
+                            isUrgent
+                              ? `<span class="px-1.5 py-0.5 rounded-full bg-rose-500/30 text-rose-100">فوری</span>`
+                              : ''
+                          }
+                        </div>
+                      </button>
+                    `;
+                  })
+                  .join('')
+          }
+        </div>
 
-          <div class="w-full lg:w-80 lg:max-w-xs flex-shrink-0 flex flex-col gap-2 max-h-[260px] lg:max-h-[70vh] overflow-y-auto pr-1">
-            ${
-              filtered.length === 0
-                ? `<div class="text-sm text-white/60 px-2 py-3">تیکتی یافت نشد.</div>`
-                : filtered
-                    .map(t => {
-                      const isActive = activeTicket && activeTicket.id === t.id;
-                      const priority = t.priority || 'normal';
-                      const msgs = getTicketMessages(t);
-                      const lastMsg = msgs[msgs.length - 1];
-                      const name = t.user_name || 'کاربر';
-                      const phone = t.user_phone || '-';
-                      const initial = name.trim()[0] || 'ک';
-
-                      return `
-                        <button
-                          type="button"
-                          class="glass rounded-xl px-3 py-2 text-right text-xs flex flex-col gap-1 ${
-                            isActive ? 'border border-violet-400/60 bg-violet-500/10' : ''
-                          }"
-                          onclick="state.adminSupportSelectedTicketId='${t.id}'; render()"
-                        >
-                          <div class="flex items-center justify-between gap-2">
-                            <div class="flex items-center gap-2">
-                              <div class="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[11px]">
-                                ${initial}
-                              </div>
-                              <div class="flex flex-col">
-                                <span class="font-semibold text-[11px]">${name}</span>
-                                <span class="text-[10px] text-white/50">${phone}</span>
-                              </div>
-                            </div>
-                            <span class="text-[10px] text-white/40">
-                              ${utils.formatTime(t.created_at || t.createdAt || '')}
-                            </span>
-                          </div>
-                          <div class="flex items-center justify-between gap-2 mt-1">
-                            <span class="line-clamp-1 text-[11px] text-white/70">
-                              ${(lastMsg && lastMsg.text) || t.subject || 'بدون متن'}
-                            </span>
-                            <span class="text-[10px] ${
-                              priority === 'urgent' ? 'text-rose-400' : 'text-emerald-400'
-                            }">
-                              ${priority === 'urgent' ? 'فوری' : 'عادی'}
-                            </span>
-                          </div>
-                        </button>
-                      `;
-                    })
-                    .join('')
-            }
-          </div>
-
-          <div class="flex-1 glass rounded-xl p-3 lg:p-4 flex flex-col min-h-[260px] max-h-[70vh]">
-            ${
-              !activeTicket
-                ? `<div class="flex-1 flex items-center justify-center text-sm text-white/60">تیکتی انتخاب نشده است.</div>`
-                : `
-              <div class="flex items-center justify-between mb-3 gap-2">
-                <div>
-                  <div class="font-semibold text-sm">${activeTicket.user_name || 'کاربر'}</div>
-                  <div class="text-[11px] text-white/60">${activeTicket.user_phone || '-'}</div>
-                </div>
-                <div class="flex items-center gap-2 text-[11px]">
-                  <span class="px-2 py-1 rounded-full ${
-                    (activeTicket.priority || 'normal') === 'urgent'
-                      ? 'bg-rose-500/15 text-rose-300'
-                      : 'bg-emerald-500/15 text-emerald-300'
-                  }">
-                    ${(activeTicket.priority || 'normal') === 'urgent' ? 'فوری' : 'عادی'}
-                  </span>
-                  <select
-                    class="bg-white/10 border border-white/20 rounded-xl px-2 py-1 text-[11px]"
-                    onchange="updateTicketStatus(activeTicket, this.value)"
+        <div class="glass rounded-2xl p-4 flex flex-col max-h-[70vh]">
+          ${
+            !activeTicket
+              ? `<p class="text-sm text-white/60">برای نمایش جزئیات، یک تیکت را انتخاب کنید.</p>`
+              : `
+            <div class="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 class="text-sm font-bold mb-1">${activeTicket.subject || 'بدون عنوان'}</h2>
+                <p class="text-[11px] text-white/60">${activeTicket.user_name || activeTicket.userName || 'کاربر'}</p>
+                <p class="text-[11px] text-white/40">${utils.formatDateTime(activeTicket.created_at || '')}</p>
+              </div>
+              <div class="flex flex-col items-end gap-1 text-[11px]">
+                <span class="px-2 py-0.5 rounded-lg bg-white/5 text-white/70">
+                  ${
+                    activeTicket.status === 'closed'
+                      ? '⛔ بسته'
+                      : activeTicket.status === 'open'
+                      ? '✅ باز'
+                      : '⏳ در انتظار'
+                  }
+                </span>
+                <div class="flex gap-1">
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
+                    onclick="updateTicketStatus(state.tickets.find(t=>t.id==='${activeTicket.id}'),'open')"
                   >
-                    <option value="open" ${activeTicket.status === 'open' ? 'selected' : ''}>باز</option>
-                    <option value="closed" ${activeTicket.status === 'closed' ? 'selected' : ''}>بسته</option>
-                  </select>
+                    باز
+                  </button>
+                  <button
+                    type="button"
+                    class="px-2 py-0.5 rounded-lg bg-rose-500/20 text-rose-100 hover:bg-rose-500/30"
+                    onclick="closeTicket(state.tickets.find(t=>t.id==='${activeTicket.id}'))"
+                  >
+                    بستن
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <div class="flex-1 overflow-y-auto space-y-2 mb-3 pr-1">
-                ${
-                  activeMessages.length === 0
-                    ? `<div class="text-xs text-white/60">پیامی ثبت نشده است.</div>`
-                    : activeMessages
-                        .map(m => {
-                          const isAdmin = m.from === 'admin';
-                          return `
-                            <div class="flex ${isAdmin ? 'justify-start' : 'justify-end'}">
-                              <div class="max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
-                                isAdmin
-                                  ? 'bg-white/10 text-white'
-                                  : 'bg-violet-500/80 text-white'
-                              }">
-                                <div class="whitespace-pre-wrap">${m.text}</div>
-                                <div class="text-[9px] text-white/60 mt-1 text-left">
-                                  ${utils.formatTime(m.at || '')}
-                                </div>
+            <div class="flex-1 rounded-xl bg-black/20 p-3 mb-3 overflow-y-auto space-y-2">
+              ${
+                activeMessages.length === 0
+                  ? `<p class="text-xs text-white/60">پیامی ثبت نشده است.</p>`
+                  : activeMessages
+                      .map(m => {
+                        const isAdmin = m.from === 'admin';
+                        return `
+                          <div class="flex ${isAdmin ? 'justify-start' : 'justify-end'}">
+                            <div class="max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
+                              isAdmin ? 'bg-white/10 text-white' : 'bg-violet-500/80 text-white'
+                            }">
+                              <div class="mb-1 text-[10px] opacity-70">
+                                ${isAdmin ? 'مدیر' : (activeTicket.user_name || activeTicket.userName || 'کاربر')}
                               </div>
+                              <div class="whitespace-pre-line">${m.text}</div>
+                              <div class="mt-1 text-[9px] opacity-60 text-right">${utils.formatDateTime(m.at || '')}</div>
                             </div>
-                          `;
-                        })
-                        .join('')
-                }
-              </div>
+                          </div>
+                        `;
+                      })
+                      .join('')
+              }
+            </div>
 
-              <form
-                class="flex items-end gap-2 mt-auto"
-                onsubmit="
-                  event.preventDefault();
-                  const text = this.message.value;
-                  addTicketMessage(activeTicket, { text, from: 'admin' }).then(() => { this.reset(); });
-                "
-              >
+            <form
+              class="flex flex-col gap-2"
+              onsubmit="
+                event.preventDefault();
+                const text = this.message.value;
+                addTicketMessage(state.tickets.find(t=>t.id==='${activeTicket.id}'), { text, from: 'admin' }).then(()=>{ this.reset(); });
+              "
+            >
+              <div class="flex gap-2 items-end">
                 <textarea
                   name="message"
-                  rows="1"
-                  class="flex-1 input-style text-xs resize-none"
-                  placeholder="نوشتن پاسخ..."
+                  rows="2"
+                  class="flex-1 input-style resize-none text-xs"
+                  placeholder="پاسخ خود را بنویسید..."
+                  required
                 ></textarea>
                 <button
                   type="submit"
-                  class="btn-primary px-3 py-2 rounded-xl text-xs font-semibold"
+                  class="px-4 py-2 rounded-xl bg-violet-500 text-xs font-semibold hover:bg-violet-600"
                 >
                   ارسال
                 </button>
-              </form>
-            `
-            }
-          </div>
-        </div>
-      `
-      }
-    </div>
-  `;
-}
+              </div>
+            </form>
 
-/* ========== Reviews: safe renderer ========== */
-
-function renderAdminReviews() {
-  const reviews = Array.isArray(state.reviews) ? state.reviews : [];
-  const products = Array.isArray(state.products) ? state.products : [];
-
-  if (!state.adminReviewsSelectedProductId && reviews.length > 0) {
-    const first = reviews[0];
-    state.adminReviewsSelectedProductId = first.product_id || first.productId || null;
-  }
-
-  const selectedProductId = state.adminReviewsSelectedProductId;
-  const productOptions = products.map(p => ({
-    id: p.id,
-    title: p.title || 'بدون نام'
-  }));
-
-  const filteredReviews = selectedProductId
-    ? reviews.filter(r => (r.product_id || r.productId) === selectedProductId)
-    : reviews;
-
-  const selectedProduct = products.find(p => p.id === selectedProductId) || null;
-
-  return `
-    <div class="animate-fade">
-      <div class="flex items-center justify-between mb-6 gap-3">
-        <div>
-          <h1 class="text-2xl lg:text-3xl font-black">نظرات کاربران</h1>
-          <p class="text-xs text-white/60 mt-1">
-            ${reviews.length} نظر ثبت شده
-            ${
-              selectedProduct
-                ? ` | محصول انتخاب شده: <span class="font-semibold">${selectedProduct.title}</span>`
-                : ''
-            }
-          </p>
-        </div>
-        <div class="min-w-[180px]">
-          <select
-            class="input-style text-xs"
-            onchange="state.adminReviewsSelectedProductId=this.value || null; render();"
-          >
-            <option value="">همه محصولات</option>
-            ${productOptions
-              .map(
-                p => `
-              <option value="${p.id}" ${selectedProductId === p.id ? 'selected' : ''}>
-                ${p.title}
-              </option>
-            `
-              )
-              .join('')}
-          </select>
+            <div class="mt-3">
+              ${renderAdminSupportQuickReplies()}
+            </div>
+          `
+          }
         </div>
       </div>
-
-      ${
-        filteredReviews.length === 0
-          ? `
-        <div class="glass rounded-3xl p-12 text-center">
-          <div class="text-5xl mb-4">📝</div>
-          <h3 class="text-lg font-bold mb-2">نظری یافت نشد</h3>
-          <p class="text-sm text-white/60">برای این فیلتر، نظری ثبت نشده است.</p>
-        </div>
-      `
-          : `
-        <div class="space-y-3">
-          ${filteredReviews
-            .map(r => {
-              const status = r.status || 'pending';
-              const name = r.user_name || r.name || 'کاربر';
-              const rating = Number(r.rating || 0);
-              const created = r.created_at || r.createdAt || '';
-
-              return `
-                <div class="glass rounded-2xl p-4 flex flex-col gap-2">
-                  <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                      <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs">
-                        ${name.trim()[0] || 'ک'}
-                      </div>
-                      <div>
-                        <div class="text-sm font-semibold">${name}</div>
-                        <div class="text-[11px] text-white/50">${utils.formatDateTime(created)}</div>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <div class="text-amber-400 text-xs">
-                        ${'★'.repeat(rating)}${'☆'.repeat(Math.max(0, 5 - rating))}
-                      </div>
-                      <select
-                        class="bg-white/10 border border-white/20 rounded-xl px-2 py-1 text-[11px]"
-                        onchange="
-                          const next = this.value;
-                          const id = '${r.id}';
-                          const idx = state.reviews.findIndex(x => x.id === id);
-                          if(idx !== -1){ state.reviews[idx].status = next; }
-                          render();
-                        "
-                      >
-                        <option value="pending" ${status === 'pending' ? 'selected' : ''}>در انتظار</option>
-                        <option value="approved" ${status === 'approved' ? 'selected' : ''}>تایید شده</option>
-                        <option value="rejected" ${status === 'rejected' ? 'selected' : ''}>رد شده</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="text-sm text-white/80 whitespace-pre-wrap">
-                    ${r.comment || r.text || ''}
-                  </div>
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      `
-      }
     </div>
   `;
 }

@@ -595,326 +595,249 @@ function renderAdminReviews() {
     byProduct[pid].reviews.push(r);
   });
 
-  const product ${
-                    tab.id === 'reviews' && pendingReviewsCount > 0
-                      ? `<span class="admin-sheet-tab-badge">${pendingReviewsCount}</span>`
-                      : ''
-                  }
-                </button>
-              `)
-              .join('')}
-          </div>
-        </div>
-      </div>
-
-      ${renderCategoryModal()}
-    </div>
-  `;
-}
-
-/* ========== Helper wrapper to align legacy select to new API ========== */
-
-function updateOrderStatus(order, nextStatus) {
-  if (!order || !order.id) return;
-  updateOrder(order.id, { status: nextStatus });
-}
-
-/* ========== Categories: modal-based CRUD + product assignment ========== */
-
-function openCategoryModal(mode, id = null) {
-  if (mode === 'add') {
-    state.categoryModal = {
-      mode: 'add',
-      id: null,
-      title: '',
-      selectedProducts: []
-    };
-  } else {
-    state.categories = Array.isArray(state.categories) ? state.categories : [];
-    state.products = Array.isArray(state.products) ? state.products : [];
-
-    const cat = state.categories.find(c => c.id === id);
-    if (!cat) return;
-
-    const selectedProducts = state.products.filter(p => p.category === id).map(p => p.id);
-
-    state.categoryModal = {
-      mode: 'edit',
-      id,
-      title: cat.title,
-      selectedProducts
-    };
-  }
-  render();
-}
-
-function closeCategoryModal() {
-  state.categoryModal = null;
-  render();
-}
-
-function saveCategoryModal() {
-  const m = state.categoryModal;
-  if (!m) return;
-
-  const title = (m.title || '').trim();
-  if (!title) {
-    toast('Ù†Ø§Ù… Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒ Ø§Ù„Ø²Ø§Ù…ÛŒ Ø§Ø³Øª', 'warning');
-    return;
+  const productIds = Object.keys(byProduct);
+  if (!state.adminReviewsSelectedProductId && productIds.length > 0) {
+    state.adminReviewsSelectedProductId = productIds[0];
   }
 
-  state.categories = Array.isArray(state.categories) ? state.categories : [];
-  state.products = Array.isArray(state.products) ? state.products : [];
+  const activeProductId = state.adminReviewsSelectedProductId;
+  const activeProduct = activeProductId ? byProduct[activeProductId] : null;
+  const activeReviews = activeProduct ? activeProduct.reviews : [];
 
-  if (m.mode === 'add') {
-    const id = utils.generateId();
-    state.categories.push({ id, title });
-
-    state.products.forEach(p => {
-      if (m.selectedProducts.includes(p.id)) {
-        p.category = id;
-      }
-    });
-
-    toast('Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒ Ø§Ø¶Ø§ÙÙ‡ Ø´Ø¯', 'success');
-  } else {
-    const cat = state.categories.find(c => c.id === m.id);
-    if (!cat) return;
-
-    cat.title = title;
-
-    state.products.forEach(p => {
-      if (p.category === m.id) p.category = '';
-    });
-
-    state.products.forEach(p => {
-      if (m.selectedProducts.includes(p.id)) {
-        p.category = m.id;
-      }
-    });
-
-    toast('Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒ Ø¨Ø±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ø´Ø¯', 'success');
-  }
-
-  closeCategoryModal();
-}
-
-function deleteCategoryWithConfirm(id) {
-  state.categories = Array.isArray(state.categories) ? state.categories : [];
-  state.products = Array.isArray(state.products) ? state.products : [];
-
-  const cat = state.categories.find(c => c.id === id);
-  if (!cat) return;
-
-  state.categoryModal = null;
-
-  state.confirmModal = {
-    type: 'delete-category',
-    title: 'Ø­Ø°Ù Ø¯Ø³ØªÙ‡',
-    message: `Ø¢ÛŒØ§ Ø§Ø² Ø­Ø°Ù Â«${cat.title}Â» Ù…Ø·Ù…Ø¦Ù† Ù‡Ø³ØªÛŒØ¯ØŸ`,
-    icon: 'ðŸ—‘ï¸',
-    confirmText: 'Ø­Ø°Ù',
-    confirmClass: 'btn-danger',
-    onConfirm: () => {
-      state.categories = state.categories.filter(c => c.id !== id);
-      state.products.forEach(p => {
-        if (p.category === id) p.category = '';
-      });
-      state.confirmModal = null;
-      render();
-    }
-  };
-  render();
-}
-
-function renderCategoryModal() {
-  const m = state.categoryModal;
-  if (!m) return '';
-
-  state.products = Array.isArray(state.products) ? state.products : [];
-
-  const uncategorized = state.products.filter(p => !p.category || p.category === m.id);
-
-  return `
-    <div class="fixed inset-0 z-[200] flex items-center justify-center p-4 modal-overlay">
-      <div class="glass-strong rounded-3xl p-6 lg:p-8 max-w-lg w-full max-h-[90%] overflow-y-auto animate-scale">
-
-        <h2 class="text-xl font-black mb-6">
-          ${m.mode === 'add' ? 'âž• Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒ Ø¬Ø¯ÛŒØ¯' : 'âœï¸ ÙˆÛŒØ±Ø§ÛŒØ´ Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒ'}
-        </h2>
-
-        <div class="space-y-5">
-
-          <div>
-            <label class="block text-sm text-white/70 mb-2">Ù†Ø§Ù… Ø¯Ø³ØªÙ‡ *</label>
-            <input 
-              type="text"
-              class="w-full input-style"
-              value="${m.title}"
-              oninput="state.categoryModal.title=this.value"
-              placeholder="Ù†Ø§Ù… Ø¯Ø³ØªÙ‡ Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†ÛŒØ¯"
-            >
-          </div>
-
-          <div>
-            <label class="block text-sm text-white/70 mb-2">Ù…Ø­ØµÙˆÙ„Ø§Øª Ø¨Ø¯ÙˆÙ† Ø¯Ø³ØªÙ‡</label>
-            <div class="flex gap-3 overflow-x-auto pb-2">
-              ${
-                uncategorized.length === 0
-                  ? `<p class="text-white/40 text-sm">Ù…Ø­ØµÙˆÙ„ Ø¨Ø¯ÙˆÙ† Ø¯Ø³ØªÙ‡ ÙˆØ¬ÙˆØ¯ Ù†Ø¯Ø§Ø±Ø¯</p>`
-                  : uncategorized
-                      .map(
-                        p => `
-                    <label class="glass rounded-xl p-3 flex-shrink-0 w-40 cursor-pointer hover:bg-white/10 transition">
-                      <div class="w-full h-24 bg-white/5 rounded-lg overflow-hidden mb-2">
-                        ${
-                          p.image || p.main_image
-                            ? `<img src="${p.image || p.main_image}" class="w-full h-full object-cover">`
-                            : `<div class="w-full h-full flex items-center justify-center text-3xl">ðŸ“¦</div>`
-                        }
-                      </div>
-
-                      <div class="flex items-center gap-2">
-                        <input 
-                          type="checkbox"
-                          class="w-4 h-4"
-                          ${m.selectedProducts.includes(p.id) ? 'checked' : ''}
-                          onchange="
-                            if(this.checked){
-                              if(!state.categoryModal.selectedProducts.includes('${p.id}')){
-                                state.categoryModal.selectedProducts.push('${p.id}');
-                              }
-                            } else {
-                              state.categoryModal.selectedProducts = state.categoryModal.selectedProducts.filter(x => x !== '${p.id}');
-                            }
-                            render();
-                          "
-                        >
-                        <span class="text-xs line-clamp-2">${p.title}</span>
-                      </div>
-                    </label>
-                  `
-                      )
-                      .join('')
-              }
-            </div>
-          </div>
-
-        </div>
-
-        <div class="flex gap-4 mt-8">
-          ${
-            m.mode === 'edit'
-              ? `<button 
-                  type="button" 
-                  onclick="deleteCategoryWithConfirm('${m.id}')"
-                  class="flex-1 btn-danger py-4 rounded-xl font-semibold"
-                >
-                  Ø­Ø°Ù Ø¯Ø³ØªÙ‡
-                </button>`
-              : ''
-          }
-
-          <button 
-            type="button" 
-            onclick="closeCategoryModal()"
-            class="flex-1 btn-ghost py-4 rounded-xl font-semibold"
-          >
-            Ø§Ù†ØµØ±Ø§Ù
-          </button>
-
-          <button 
-            type="button" 
-            onclick="saveCategoryModal()"
-            class="flex-1 btn-primary py-4 rounded-xl font-semibold"
-          >
-            Ø«Ø¨Øª
-          </button>
-        </div>
-
-      </div>
-    </div>
-  `;
-}
-
-function renderAdminCategoriesEditor() {
-  state.categories = Array.isArray(state.categories) ? state.categories : [];
+  const pendingCount = state.reviews.filter(r => r.status === 'pending').length;
 
   return `
     <div class="animate-fade">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl lg:text-3xl font-black">Ù…Ø¯ÛŒØ±ÛŒØª Ø¯Ø³ØªÙ‡â€ŒØ¨Ù†Ø¯ÛŒâ€ŒÙ‡Ø§ (${state.categories.length})</h1>
-        <button class="btn-primary px-5 py-3 rounded-xl font-semibold text-sm" type="button" onclick="openCategoryModal('add')">
-          Ø§ÙØ²ÙˆØ¯Ù† Ø¯Ø³ØªÙ‡
-        </button>
-      </div>
-
-      <div class="grid gap-3">
-        ${state.categories
-          .map(
-            (c, i) => `
-          <div class="glass rounded-xl p-4 flex items-center justify-between animate-fade" style="animation-delay:${i *
-            0.05}s">
-            <div>
-              <div class="font-semibold">${c.title}</div>
-              <div class="text-xs text-white/40">${c.id}</div>
-            </div>
-            <div class="flex gap-2">
-              <button class="p-2 glass rounded-xl" type="button" onclick="openCategoryModal('edit', '${c.id}')">âœï¸</button>
-              <button class="p-2 glass rounded-xl text-rose-400 hover:bg-rose-500/20" type="button" onclick="deleteCategoryWithConfirm('${c.id}')">ðŸ—‘ï¸</button>
-            </div>
+      <div class="flex flex-col lg:flex-row gap-6">
+        
+        <!-- Products list -->
+        <aside class="lg:w-72 glass rounded-2xl p-4 h-max max-h-[70vh] overflow-y-auto">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold flex items-center gap-2">
+              <span>📝</span>
+              <span>محصولات با نظر</span>
+            </h2>
+            ${
+              pendingCount > 0
+                ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">در انتظار: ${pendingCount}</span>`
+                : ''
+            }
           </div>
-        `
-          )
-          .join('')}
+          ${
+            productIds.length === 0
+              ? `<p class="text-xs text-white/60">هنوز نظری ثبت نشده است.</p>`
+              : productIds
+                  .map(pid => {
+                    const p = byProduct[pid];
+                    const pPending = p.reviews.filter(r => r.status === 'pending').length;
+                    return `
+                      <button
+                        type="button"
+                        class="w-full text-right px-3 py-2 rounded-xl text-xs mb-1 flex items-center justify-between ${activeProductId === pid ? 'bg-white/10' : 'glass hover:bg-white/10'}"
+                        onclick="state.adminReviewsSelectedProductId='${pid}'; render()"
+                      >
+                        <span class="line-clamp-1">${p.title}</span>
+                        <span class="flex items-center gap-1 text-[10px] text-white/60">
+                          <span>${p.reviews.length} نظر</span>
+                          ${
+                            pPending > 0
+                              ? `<span class="px-1.5 py-0.5 rounded-full bg-rose-500/30 text-rose-100">${pPending}</span>`
+                              : ''
+                          }
+                        </span>
+                      </button>
+                    `;
+                  })
+                  .join('')
+          }
+        </aside>
+
+        <!-- Reviews list -->
+        <section class="flex-1">
+          ${
+            !activeProduct
+              ? `<div class="glass rounded-2xl p-10 text-center text-sm text-white/60">
+                  محصولی برای نمایش نظرات انتخاب نشده است.
+                </div>`
+              : `
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h1 class="text-xl lg:text-2xl font-black mb-1">نظرات محصول</h1>
+                <p class="text-xs text-white/60 line-clamp-1">${activeProduct.title}</p>
+              </div>
+              <div class="text-xs text-white/60">
+                <span>کل نظرات: ${activeReviews.length}</span>
+              </div>
+            </div>
+
+            ${
+              activeReviews.length === 0
+                ? `<div class="glass rounded-2xl p-10 text-center text-sm text-white/60">
+                    برای این محصول نظری ثبت نشده است.
+                  </div>`
+                : `
+              <div class="space-y-3 max-h-[70vh] overflow-y-auto">
+                ${activeReviews
+                  .map(r => {
+                    const created = r.created_at || r.createdAt || '';
+                    const rating = typeof r.rating === 'number' ? r.rating : parseInt(r.rating || '0', 10) || 0;
+                    const stars = '★★★★★'.slice(0, Math.max(0, Math.min(5, rating)));
+                    const emptyStars = '☆☆☆☆☆'.slice(stars.length);
+                    return `
+                      <div class="glass rounded-2xl p-4 text-sm">
+                        <div class="flex items-center justify-between mb-2">
+                          <div>
+                            <div class="font-semibold text-sm">${r.user_name || r.userName || 'کاربر ناشناس'}</div>
+                            <div class="text-[11px] text-white/50">${utils.formatDateTime(created)}</div>
+                          </div>
+                          <div class="text-xs text-amber-300 font-mono">
+                            <span class="text-base">${stars}<span class="text-white/20">${emptyStars}</span></span>
+                            ${rating ? `<span class="ml-1 text-[11px] text-white/60">(${rating}/5)</span>` : ''}
+                          </div>
+                        </div>
+
+                        <p class="text-sm text-white/80 whitespace-pre-line mb-3">${r.text || r.comment || ''}</p>
+
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="flex items-center gap-2 text-[11px]">
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg flex items-center gap-1 ${r._adminReaction === 'like' ? 'bg-emerald-500/20 text-emerald-300' : 'glass text-white/70 hover:bg-white/10'}"
+                              onclick="reactToReview('${r.id}', 'like')"
+                            >
+                              👍 <span>${r.likes}</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg flex items-center gap-1 ${r._adminReaction === 'dislike' ? 'bg-rose-500/20 text-rose-300' : 'glass text-white/70 hover:bg-white/10'}"
+                              onclick="reactToReview('${r.id}', 'dislike')"
+                            >
+                              👎 <span>${r.dislikes}</span>
+                            </button>
+                          </div>
+
+                          <div class="flex items-center gap-2 text-[11px]">
+                            <span class="px-2 py-1 rounded-lg bg-white/5 text-white/70">
+                              ${
+                                r.status === 'approved'
+                                  ? '✅ تایید شده'
+                                  : r.status === 'rejected'
+                                  ? '⛔ رد شده'
+                                  : '⏳ در انتظار'
+                              }
+                            </span>
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                              onclick="setReviewStatus('${r.id}', 'approved')"
+                            >
+                              تایید
+                            </button>
+                            <button
+                              type="button"
+                              class="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-200 hover:bg-rose-500/30"
+                              onclick="setReviewStatus('${r.id}', 'rejected')"
+                            >
+                              رد
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join('')}
+              </div>
+            `
+            }
+          `
+          }
+        </section>
+
       </div>
     </div>
   `;
 }
 
-/* ========== Reviews: product-based moderation + like/dislike ========== */
+/* ========== Orders: safe render ========== */
 
-function normalizeReview(r) {
-  if (!r) return null;
-  r.status = r.status || 'pending';
-  r.likes = typeof r.likes === 'number' ? r.likes : parseInt(r.likes || '0', 10) || 0;
-  r.dislikes = typeof r.dislikes === 'number' ? r.dislikes : parseInt(r.dislikes || '0', 10) || 0;
-  return r;
-}
+function renderAdminOrdersSafe() {
+  let filteredOrders = Array.isArray(state.orders) ? [...state.orders] : [];
+  if (state.orderFilter.status) {
+    filteredOrders = filteredOrders.filter(o => o.status === state.orderFilter.status);
+  }
 
-function getReviewProductId(r) {
-  return r.product_id || r.productId || r.product || 'unknown';
-}
+  return `
+    <div class="animate-fade">
+      <h1 class="text-2xl lg:text-3xl font-black mb-8">سفارشات (${filteredOrders.length})</h1>
 
-function getReviewProductTitle(r) {
-  return r.product_title || r.productTitle || r.product_name || 'Ù…Ø­ØµÙˆÙ„ Ø¨Ø¯ÙˆÙ† Ù†Ø§Ù…';
-}
+      <div class="glass rounded-2xl p-5 mb-6">
+        <div class="flex flex-wrap gap-2">
+          <button onclick="state.orderFilter.status = ''; render()" class="px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            !state.orderFilter.status ? 'bg-violet-500 text-white' : 'glass hover:bg-white/10'
+          }">همه</button>
+          ${
+            [
+              { value: 'pending', label: '⏳ در انتظار', color: 'bg-amber-500' },
+              { value: 'processing', label: '⚙️ پردازش', color: 'bg-blue-500' },
+              { value: 'shipped', label: '🚚 ارسال شده', color: 'bg-cyan-500' },
+              { value: 'delivered', label: '✅ تحویل', color: 'bg-emerald-500' }
+            ]
+              .map(
+                opt => `
+              <button onclick="state.orderFilter.status = '${opt.value}'; render()" class="px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  state.orderFilter.status === opt.value ? opt.color + ' text-white' : 'glass hover:bg-white/10'
+                }">${opt.label}</button>
+            `
+              )
+              .join('')
+          }
+        </div>
+      </div>
 
-function setReviewStatus(id, status) {
-  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
-  const r = state.reviews.find(x => x.id === id);
-  if (!r) return;
-  r.status = status;
-  render();
-}
+      ${
+        filteredOrders.length > 0
+          ? `
+          <div class="space-y-4">
+            ${filteredOrders
+              .map(order => {
+                let items = [];
+                if (Array.isArray(order.items)) {
+                  items = order.items;
+                } else {
+                  try {
+                    items = JSON.parse(order.items || '[]');
+                  } catch {
+                    items = [];
+                  }
+                }
 
-function reactToReview(id, reaction) {
-  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
-  const r = state.reviews.find(x => x.id === id);
-  if (!r) return;
-
-  normalizeReview(r);
-
-  const prev = r._adminReaction || null;
-
-  if (reaction === 'like') {
-    if (prev === 'like') {
-      r.likes = Math.max(0, r.likes - 1);
-      r._adminReaction = null;
-    } else {
-      if (prev === 'dislike') r.dislikes = Math.max(0, r.dislikes - 1);
-      r.likes += 1;
- te/70">${order.user_phone || order.userPhone || ''}</p>
+                return `
+                <div class="glass rounded-2xl p-6 animate-fade">
+                  <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+                    <div>
+                      <span class="font-mono font-bold">#${(order.id || '').slice(-8)}</span>
+                      <p class="text-xs text-white/60 mt-1">${utils.formatDateTime(order.created_at || order.createdAt || '')}</p>
+                    </div>
+                    <div>
+                      <label for="status-${order.id}" class="sr-only">وضعیت سفارش</label>
+                      <select 
+                        id="status-${order.id}"
+                        onchange="updateOrder('${order.id}', { status: this.value })"
+                        class="bg-white/10 border border-white/20 rounded-xl py-2.5 px-4 text-white text-sm focus:outline-none focus:border-violet-500"
+                      >
+                        <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>⏳ در انتظار</option>
+                        <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>⚙️ پردازش</option>
+                        <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>🚚 ارسال شده</option>
+                        <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>✅ تحویل</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div class="grid md:grid-cols-3 gap-4">
+                    <div class="glass rounded-xl p-4">
+                      <p class="text-xs text-white/60 mb-2">مشتری</p>
+                      <p class="font-semibold">${order.user_name || 'بدون نام'}</p>
+                      <p class="text-sm font-mono text-white/70">${order.user_phone || order.userPhone || ''}</p>
                     </div>
                     
                     <div class="glass rounded-xl p-4 hidden md:block">
@@ -1154,98 +1077,100 @@ function renderAdminSupportSafe() {
       </div>
 
       <div class="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4">
-        <div class="glass rounded-2xl p-4 max-h-[70vh] overflow-y-auto">
+        <!-- Tickets list -->
+        <aside class="glass rounded-2xl p-3 max-h-[70vh] overflow-y-auto">
           ${
             filtered.length === 0
-              ? `<p class="text-sm text-white/60">تیکتی یافت نشد.</p>`
+              ? `<div class="text-sm text-white/60 p-4 text-center">تیکتی یافت نشد.</div>`
               : filtered
                   .map(t => {
                     const isActive = activeTicket && activeTicket.id === t.id;
                     const isUrgent = (t.priority || 'normal') === 'urgent';
+                    const statusLabel =
+                      t.status === 'closed' ? 'بسته' : 'باز';
                     return `
                       <button
                         type="button"
-                        class="w-full text-right mb-2 px-3 py-2 rounded-xl text-xs flex items-center justify-between ${
+                        class="w-full text-right mb-2 px-3 py-2 rounded-xl text-xs ${
                           isActive ? 'bg-white/10' : 'glass hover:bg-white/10'
                         }"
                         onclick="state.adminSupportSelectedTicketId='${t.id}'; render()"
                       >
-                        <div class="flex flex-col gap-0.5">
+                        <div class="flex items-center justify-between mb-1">
                           <span class="font-semibold line-clamp-1">${t.subject || 'بدون عنوان'}</span>
-                          <span class="text-[11px] text-white/60 line-clamp-1">${t.user_name || t.userName || 'کاربر'}</span>
-                        </div>
-                        <div class="flex flex-col items-end gap-0.5 text-[10px] text-white/60">
-                          <span>${utils.formatDateTime(t.created_at || '')}</span>
                           ${
                             isUrgent
-                              ? `<span class="px-1.5 py-0.5 rounded-full bg-rose-500/30 text-rose-100">فوری</span>`
+                              ? `<span class="px-1.5 py-0.5 rounded-full bg-rose-500/30 text-rose-100 text-[10px]">فوری</span>`
                               : ''
                           }
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-white/60">
+                          <span>${t.user_name || t.userName || 'کاربر'}</span>
+                          <span>${utils.formatDateTime(t.created_at || t.createdAt || '')}</span>
+                          <span>${statusLabel}</span>
                         </div>
                       </button>
                     `;
                   })
                   .join('')
           }
-        </div>
+        </aside>
 
-        <div class="glass rounded-2xl p-4 flex flex-col max-h-[70vh]">
+        <!-- Active ticket / chat -->
+        <section class="glass rounded-2xl p-4 flex flex-col max-h-[70vh]">
           ${
             !activeTicket
-              ? `<p class="text-sm text-white/60">برای نمایش جزئیات، یک تیکت را انتخاب کنید.</p>`
+              ? `<div class="flex-1 flex items-center justify-center text-sm text-white/60">
+                  تیکتی برای نمایش انتخاب نشده است.
+                </div>`
               : `
-            <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="border-b border-white/10 pb-3 mb-3 flex items-center justify-between">
               <div>
-                <h2 class="text-sm font-bold mb-1">${activeTicket.subject || 'بدون عنوان'}</h2>
-                <p class="text-[11px] text-white/60">${activeTicket.user_name || activeTicket.userName || 'کاربر'}</p>
-                <p class="text-[11px] text-white/40">${utils.formatDateTime(activeTicket.created_at || '')}</p>
+                <h2 class="text-sm font-bold mb-1 line-clamp-1">${activeTicket.subject || 'بدون عنوان'}</h2>
+                <p class="text-[11px] text-white/60">
+                  ${activeTicket.user_name || activeTicket.userName || 'کاربر'} •
+                  ${utils.formatDateTime(activeTicket.created_at || activeTicket.createdAt || '')}
+                </p>
               </div>
-              <div class="flex flex-col items-end gap-1 text-[11px]">
-                <span class="px-2 py-0.5 rounded-lg bg-white/5 text-white/70">
+              <div class="flex items-center gap-2 text-[11px]">
+                <span class="px-2 py-1 rounded-lg bg-white/5 text-white/70">
                   ${
                     activeTicket.status === 'closed'
-                      ? '⛔ بسته'
-                      : activeTicket.status === 'open'
-                      ? '✅ باز'
-                      : '⏳ در انتظار'
+                      ? 'بسته'
+                      : 'باز'
                   }
                 </span>
-                <div class="flex gap-1">
-                  <button
-                    type="button"
-                    class="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
-                    onclick="updateTicketStatus(state.tickets.find(t=>t.id==='${activeTicket.id}'),'open')"
-                  >
-                    باز
-                  </button>
-                  <button
-                    type="button"
-                    class="px-2 py-0.5 rounded-lg bg-rose-500/20 text-rose-100 hover:bg-rose-500/30"
-                    onclick="closeTicket(state.tickets.find(t=>t.id==='${activeTicket.id}'))"
-                  >
-                    بستن
-                  </button>
-                </div>
+                ${
+                  activeTicket.status !== 'closed'
+                    ? `<button
+                        type="button"
+                        class="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                        onclick="closeTicket(state.tickets.find(t => t.id === '${activeTicket.id}'))"
+                      >
+                        بستن تیکت
+                      </button>`
+                    : ''
+                }
               </div>
             </div>
 
-            <div class="flex-1 rounded-xl bg-black/20 p-3 mb-3 overflow-y-auto space-y-2">
+            <div class="flex-1 overflow-y-auto space-y-2 mb-3">
               ${
                 activeMessages.length === 0
-                  ? `<p class="text-xs text-white/60">پیامی ثبت نشده است.</p>`
+                  ? `<div class="text-xs text-white/60 text-center py-4">پیامی ثبت نشده است.</div>`
                   : activeMessages
                       .map(m => {
-                        const isAdmin = m.from === 'admin';
+                        const isAdmin = (m.from || 'user') === 'admin';
                         return `
                           <div class="flex ${isAdmin ? 'justify-start' : 'justify-end'}">
                             <div class="max-w-[80%] rounded-2xl px-3 py-2 text-xs ${
-                              isAdmin ? 'bg-white/10 text-white' : 'bg-violet-500/80 text-white'
+                              isAdmin ? 'bg-white/10 text-white' : 'bg-violet-500 text-white'
                             }">
                               <div class="mb-1 text-[10px] opacity-70">
-                                ${isAdmin ? 'مدیر' : (activeTicket.user_name || activeTicket.userName || 'کاربر')}
+                                ${isAdmin ? 'پشتیبانی' : (activeTicket.user_name || activeTicket.userName || 'کاربر')}
+                                • ${utils.formatDateTime(m.at || '')}
                               </div>
                               <div class="whitespace-pre-line">${m.text}</div>
-                              <div class="mt-1 text-[9px] opacity-60 text-right">${utils.formatDateTime(m.at || '')}</div>
                             </div>
                           </div>
                         `;
@@ -1254,39 +1179,55 @@ function renderAdminSupportSafe() {
               }
             </div>
 
-            <form
-              class="flex flex-col gap-2"
-              onsubmit="
-                event.preventDefault();
-                const text = this.message.value;
-                addTicketMessage(state.tickets.find(t=>t.id==='${activeTicket.id}'), { text, from: 'admin' }).then(()=>{ this.reset(); });
-              "
-            >
-              <div class="flex gap-2 items-end">
+            <div class="border-t border-white/10 pt-3 mt-auto space-y-2">
+              <div class="flex flex-wrap gap-2 mb-1">
+                ${
+                  (Array.isArray(state.supportQuickReplies) ? state.supportQuickReplies : [])
+                    .map(
+                      q => `
+                    <button
+                      type="button"
+                      class="px-2 py-1 rounded-xl text-[11px] glass hover:bg-white/10"
+                      onclick="addTicketMessage(state.tickets.find(t => t.id === '${activeTicket.id}'), { from: 'admin', text: '${(q.text || '').replace(/'/g, "\\'")}' })"
+                    >
+                      ${q.label}
+                    </button>
+                  `
+                    )
+                    .join('')
+                }
+              </div>
+
+              <form
+                class="flex items-center gap-2"
+                onsubmit="
+                  event.preventDefault();
+                  const input = this.querySelector('textarea');
+                  const val = input.value;
+                  addTicketMessage(state.tickets.find(t => t.id === '${activeTicket.id}'), { from: 'admin', text: val }).then(ok => { if(ok) input.value=''; });
+                "
+              >
                 <textarea
-                  name="message"
-                  rows="2"
                   class="flex-1 input-style resize-none text-xs"
+                  rows="2"
                   placeholder="پاسخ خود را بنویسید..."
-                  required
                 ></textarea>
                 <button
                   type="submit"
-                  class="px-4 py-2 rounded-xl bg-violet-500 text-xs font-semibold hover:bg-violet-600"
+                  class="px-3 py-2 rounded-xl bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600"
                 >
                   ارسال
                 </button>
-              </div>
-            </form>
-
-            <div class="mt-3">
-              ${renderAdminSupportQuickReplies()}
+              </form>
             </div>
           `
           }
-        </div>
+        </section>
+      </div>
+
+      <div class="mt-4">
+        ${renderAdminSupportQuickReplies()}
       </div>
     </div>
   `;
 }
-

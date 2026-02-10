@@ -1,4 +1,7 @@
-      body {
+/* ═══════════════════════════════════════════════════════════════*/
+/* css*/
+/* ═══════════════════════════════════════════════════════════════*/ 
+ body {
       box-sizing: border-box;
       font-family: 'Vazirmatn', system-ui, sans-serif;
     }
@@ -422,23 +425,6 @@
   100% { transform: translateY(0) rotate(0deg); }
 }
 
-/* Animated wave under hero */
-.wave-animated path {
-  animation: waveMove 6s ease-in-out infinite;
-}
-
-@keyframes waveMove {
-  0% {
-    d: path("M0 50C360 0 1080 100 1440 50V100H0V50Z");
-  }
-  50% {
-    d: path("M0 60C360 20 1080 80 1440 60V100H0V60Z");
-  }
-  100% {
-    d: path("M0 50C360 0 1080 100 1440 50V100H0V50Z");
-  }
-}
-
 /* ───────── Bottom Sheet: Mobile Admin Tabs ───────── */
 
 .admin-sheet-trigger {
@@ -644,3 +630,4 @@
     display: none !important;
   }
 }
+

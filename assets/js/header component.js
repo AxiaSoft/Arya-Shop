@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// HEADER COMPONENT (GPT‑5 Final, بدون رفرش روی منو و سرچ)
+// HEADER COMPONENT
+// File: assets/js/header component.js
 // ═══════════════════════════════════════════════════════════════
 (function () {
   function ensureHeaderStyles() {

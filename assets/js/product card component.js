@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // PRODUCT CARD COMPONENT
+// File: assets/js/product card component.js
 // ═══════════════════════════════════════════════════════════════
 function renderProductCard(product, index = 0) {
   const inStock = (product.stock || 0) > 0;

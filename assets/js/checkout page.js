@@ -1,6 +1,7 @@
-// CHECKOUT PAGE (GPT‑5 Final: address management + schema aligned + safe payment)
+//═════════════════════════════════════════════════════════════════════════════════
+// CHECKOUT PAGE
 // File: assets/js/checkout page.js
-
+//═════════════════════════════════════════════════════════════════════════════════
 (function () {
   function renderCheckoutPage() {
     if (!state.user || state.cart.length === 0) {

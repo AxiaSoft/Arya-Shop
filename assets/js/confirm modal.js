@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // CONFIRM MODAL
-// ══════════════════════════════════════  ════════════════════════
+// File: assets/js/confrim modal.js
+// ═══════════════════════════════════════════════════════════════
 function renderConfirmModal() {
   const modal = state.confirmModal;
   if (!modal) return '';

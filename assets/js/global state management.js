@@ -1,9 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// GLOBAL STATE MANAGEMENT (GPT‑5 FINAL)
-// - Persistent login (user + currentUser + isAdmin)
-// - Unified state store
-// - Auto-render on change
-// - Safe deep merge
+// GLOBAL STATE MANAGEMENT
 // File: assets/js/global state management.js
 // ═══════════════════════════════════════════════════════════════
 

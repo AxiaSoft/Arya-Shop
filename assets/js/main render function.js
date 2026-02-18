@@ -1,9 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// MAIN RENDER FUNCTION (GPT‑5 FINAL)
-// - Global login restore from AppState
-// - Batched render with rAF
-// - Safe compose + error boundary
-// - View transitions (optional)
+// MAIN RENDER FUNCTION (FINAL)
+// File: assets/js/main render function.js
 // ═══════════════════════════════════════════════════════════════
 
 (function () {
@@ -49,6 +46,11 @@
   // ---------- Compose whole page ----------
   function composePage() {
     const mainHTML = safe(() => {
+      // If article editor screen is active, render it first
+      if (state.currentScreen === "article-editor") {
+        return renderArticleEditor();
+      }
+
       if (state.isAdmin && state.page === 'admin') {
         return renderAdminPanel();
       }
@@ -65,8 +67,9 @@
     });
 
     const overlays = [
-      state.confirmModal != null ? safe(() => renderConfirmModal()) : '',
-      state.editProduct  != null ? safe(() => renderProductModal()) : ''
+      state.confirmModal ? safe(() => renderConfirmModal()) : '',
+      state.editProduct  ? safe(() => renderProductModal()) : '',
+      state.videoPlayer  ? safe(() => renderVideoPlayerModal()) : ''
     ].join('');
 
     return mainHTML + overlays;

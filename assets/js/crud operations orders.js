@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// CRUD OPERATIONS ORDERS (GPT‑5 Refactor: safe + modular)
+// CRUD OPERATIONS ORDERS
 // File: assets/js/crud operations orders.js
 // ═══════════════════════════════════════════════════════════════
 

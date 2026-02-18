@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// UTILITY FUNCTIONS (GPT‑5 Enhanced)
+// UTILITY FUNCTIONS
+// File: assets/js/utility functions.js
 // ═══════════════════════════════════════════════════════════════
 const utils = {
   // Numbers

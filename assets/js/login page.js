@@ -1,11 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// LOGIN PAGE (GPT‑5 FINAL)
-// - OTP 6 digits
-// - CAPTCHA حرفه‌ای (Canvas + Noise + Distortion)
-// - Admin detection (09123456789)
-// - Stable timer
-// - حفظ لاگین بعد از رفرش فقط وقتی واقعاً لاگین است
-// - Sync با AppState (بدون دیتابیس)
+// LOGIN PAGE
+// File: assets/js/login page.js
 // ═══════════════════════════════════════════════════════════════
 
 (function () {
@@ -30,9 +25,7 @@
     state.isAdmin     = typeof state.isAdmin === "boolean" ? state.isAdmin : false;
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // CAPTCHA (centered with measureText)
-  // ═══════════════════════════════════════════════════════════════
   function generateCaptcha() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let text = "";
@@ -90,9 +83,7 @@
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // TIMER
-  // ═══════════════════════════════════════════════════════════════
   function clearOtpInterval() {
     if (state.otpInterval) {
       clearInterval(state.otpInterval);
@@ -134,9 +125,7 @@
     }, 1000);
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // SEND OTP
-  // ═══════════════════════════════════════════════════════════════
   function sendOtp(phone) {
     const p = String(phone || "").trim();
     const enteredCaptcha = String(document.getElementById("captcha-input")?.value || "")
@@ -164,18 +153,14 @@
     toast("کد تایید ارسال شد", "success");
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // RESEND OTP
-  // ═══════════════════════════════════════════════════════════════
   function resendOtp() {
     state.generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
     startOtpTimer(120);
     toast("کد جدید ارسال شد", "success");
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // CHANGE PHONE
-  // ═══════════════════════════════════════════════════════════════
   function changePhoneNumber() {
     clearOtpInterval();
     state.loginStep = "phone";
@@ -184,9 +169,7 @@
     render();
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // VERIFY OTP + SAVE LOGIN
-  // ═══════════════════════════════════════════════════════════════
   function verifyOtp(code) {
     const entered = String(code || "").trim();
     const realOtp = String(state.generatedOtp || "").trim();
@@ -239,9 +222,7 @@
     render();
   }
 
-  // ═══════════════════════════════════════════════════════════════
   // RAW RENDER FUNCTION
-  // ═══════════════════════════════════════════════════════════════
   function _renderLoginPageInner() {
     return `
       ${typeof renderHeader === "function" ? renderHeader() : ""}
@@ -345,13 +326,12 @@
         </div>
       </main>
 
-      ${typeof renderFooter === "function" ? renderFooter() : ""}
+      
     `;
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // PUBLIC RENDER (CAPTCHA + TIMER INIT)
-// ═══════════════════════════════════════════════════════════════
+
+// PUBLIC RENDER (CAPTCHA + TIMER INIT)
   window.renderLoginPage = function () {
     const html = _renderLoginPageInner();
 

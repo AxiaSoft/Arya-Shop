@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// AUTHENTICATION FUNCTIONS (Final Fixed Version)
+// AUTHENTICATION FUNCTIONS
 // File: assets/js/authentication functions.js
 // ═══════════════════════════════════════════════════════════════
 

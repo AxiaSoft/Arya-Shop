@@ -1,6 +1,7 @@
-// CART PAGE (GPT‑15 Refactor: aligned with order schema + safe payment)
+//═════════════════════════════════════════════════════════════════════════════
+// CART PAGE
 // File: assets/js/cart page.js
-
+//═══════════════════════════════════════════════════════════════════════════
 function renderCartPage() {
   const total = getCartTotal();
   const originalTotal = getCartOriginalTotal();
@@ -10,7 +11,6 @@ function renderCartPage() {
 
   return `
     ${renderHeader()}
-    
     <main class="max-w-4xl mx-auto px-4 lg:px-8 py-8 lg:py-12">
       <h1 class="text-2xl lg:text-4xl font-black mb-8">سبد خرید</h1>
       
@@ -118,7 +118,7 @@ function renderCartPage() {
         </div>
       `}
     </main>
-    ${renderFooter()}
+    ${state.page !== 'cart' && state.page !== 'login' && state.page !== 'profile' ? renderFooter() : ''}
   `;
 }
 

@@ -38,7 +38,7 @@
     
     /* Gradient Backgrounds */
     .bg-main {
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 30%, #0f172a 60%, #1e1b4b 100%);
+      background: linear-gradient(135deg, #142346 0%, #1e1b4b 30%, #142346 60%, #1e1b4b 100%);
       background-attachment: fixed;
     }
     .bg-hero-gradient {
@@ -347,7 +347,6 @@
 
     /* ═══════════════════════════════════════════════════════════════
    SHOP FILTER SIDEBAR (INDEPENDENT FROM HAMBURGER MENU)
-   این CSS را در استایل اصلی‌ات اضافه کن
    ═══════════════════════════════════════════════════════════════ */
 
 .shop-filter-sidebar {
@@ -631,3 +630,135 @@
   }
 }
 
+/* ========== FIX FOR SELECT DROPDOWNS (منوهای سلکت) ========== */
+
+/* استایل پایه برای تمام سلکت‌ها */
+select, 
+select.input-style,
+select.form-select,
+.filter-select,
+.category-select {
+  background-color: #1e1e2e !important;
+  color: #f0f0f0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: left 10px center !important;
+  background-size: 16px !important;
+  padding-left: 36px !important;
+  cursor: pointer !important;
+}
+
+/* استایل برای گزینه‌های داخل سلکت (آپشن‌ها) */
+select option {
+  background-color: #2d2d3a !important;
+  color: #f0f0f0 !important;
+  padding: 12px !important;
+  font-size: 14px !important;
+}
+
+/* استایل برای گزینه‌های هاور شده */
+select option:hover,
+select option:focus,
+select option:active,
+select option:checked {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+  color: white !important;
+}
+
+/* استایل اختصاصی برای فایرفاکس */
+@-moz-document url-prefix() {
+  select option {
+    background-color: #2d2d3a !important;
+    color: #f0f0f0 !important;
+  }
+  
+  select option:checked {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    color: white !important;
+  }
+}
+
+/* استایل برای سلکت‌های داخل مودال */
+.modal-overlay select,
+.modal-overlay select option {
+  background-color: #2a2a3a !important;
+  color: #ffffff !important;
+}
+
+/* استایل برای سلکت‌های داخل باکس شیشه‌ای */
+.glass select,
+.glass-strong select,
+.glass-dark select {
+  background-color: rgba(30, 30, 46, 0.95) !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+/* استایل برای وقتی سلکت فوکوس داره */
+select:focus {
+  outline: none !important;
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3) !important;
+}
+
+/* استایل برای وقتی سلکت غیرفعاله */
+select:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+/* استایل برای سلکت‌های چندتایی */
+select[multiple] {
+  background-image: none !important;
+  padding-left: 14px !important;
+}
+
+select[multiple] option {
+  padding: 8px !important;
+  margin: 2px 0 !important;
+  border-radius: 4px !important;
+}
+
+/* استایل برای سلکت‌های داخل پنل ادمین */
+.admin-panel select,
+.dashboard select {
+  background-color: #1e1e2e !important;
+  color: #fff !important;
+}
+
+/* استایل برای سلکت‌های داخل سایدبار فیلتر */
+.shop-filter-sidebar select,
+.shop-filter-sidebar select option {
+  background-color: #2a2a3a !important;
+  color: #fff !important;
+}
+
+/* استایل برای سلکت‌های داخل فرم‌ها */
+form select,
+form select option {
+  background-color: #1e1e2e !important;
+  color: #f0f0f0 !important;
+}
+
+/* استایل برای کروم، سافاری، اج */
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  select,
+  select.input-style {
+    background-color: #1e1e2e !important;
+    color: #f0f0f0 !important;
+  }
+  
+  select:focus {
+    outline: none !important;
+  }
+  
+  select option:checked {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    color: white !important;
+  }
+}

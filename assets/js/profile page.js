@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// PROFILE PAGE (GPT‑5 FINAL, UPDATED TICKETS SYSTEM + MODAL + URGENT)
+// PROFILE PAGE
 // File: assets/js/profile page.js
 // ═══════════════════════════════════════════════════════════════
 (function () {
@@ -843,8 +843,6 @@
 
       </main>
 
-      ${renderUserTicketModal()}
-      ${typeof renderFooter === 'function' ? renderFooter() : ''}
     `;
   }
 
